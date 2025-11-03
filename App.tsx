@@ -103,6 +103,15 @@ const Particles: React.FC = () => (
   </div>
 );
 
+// Helper function to update native app state for push notification suppression
+const updateNativeRoomState = (roomId: string | null) => {
+    // Memanggil bridge method yang diasumsikan ada di MainActivity (Anda harus memastikan ini ada di sisi Android)
+    if (typeof (window as any).AndroidBridge?.setCurrentRoomId === 'function') {
+      (window as any).AndroidBridge.setCurrentRoomId(roomId || '');
+      console.log(`[Bridge] Current room ID set to: ${roomId || 'null'}`);
+    }
+};
+
 const AppContent: React.FC = () => {
   // --- STATE DEFINITIONS ---
   const [pageHistory, setPageHistory] = useState<Page[]>(['home']);
@@ -189,7 +198,8 @@ const AppContent: React.FC = () => {
     }
     
     setCurrentRoom(null);
-    
+    updateNativeRoomState(null); // <-- TAMBAHKAN INI
+
     console.log(`Left room: ${roomId}, reset unread count, updated last visit, removed typing status.`);
   }, [currentRoom, database, firebaseUser]); 
 
@@ -366,6 +376,7 @@ const AppContent: React.FC = () => {
 
   const handleLogout = useCallback(() => {
     leaveCurrentRoom();
+    updateNativeRoomState(null); // <-- TAMBAHKAN INI
     
     const auth = getAuth();
     signOut(auth)
@@ -467,6 +478,7 @@ const AppContent: React.FC = () => {
 
   const handleJoinRoom = useCallback((room: Room) => {
     setCurrentRoom(room);
+    updateNativeRoomState(room.id); // <-- TAMBAHKAN INI
     
     // Panggil Android Bridge untuk subscribe
     if (typeof (window as any).AndroidBridge?.subscribeToRoom === 'function') {
@@ -523,6 +535,10 @@ const AppContent: React.FC = () => {
     if (typeof (window as any).AndroidBridge?.unsubscribeFromRoom === 'function') {
       (window as any).AndroidBridge.unsubscribeFromRoom(roomId);
       console.log(`[Bridge] Unsubscribed from topic: ${roomId}`);
+    }
+    
+    if (currentRoom?.id === roomId) { 
+      updateNativeRoomState(null); // <-- TAMBAHKAN PADA LEAVE JOINED JIKA INI ROOM AKTIF
     }
 
     if (hasJoinedRoom[roomId]) {
@@ -932,6 +948,7 @@ const AppContent: React.FC = () => {
       } else {
         if (currentUser !== null) setCurrentUser(null);
         setPendingGoogleUser(null);
+        updateNativeRoomState(null); // <-- TAMBAHKAN INI UNTUK CLEAR NATIVE STATE SAAT LOGOUT
       }
       setIsAuthLoading(false);
     });
@@ -1118,7 +1135,9 @@ const AppContent: React.FC = () => {
   // **SOLUSI:** Pindahkan definisi `totalUnreadCount` ke SINI
   const totalUnreadCount = useMemo(() => {
     return Object.entries(unreadCounts).reduce((total, [roomId, count]) => {
-      if (notificationSettings[roomId] !== false && roomId !== currentRoom?.id) {
+      // Logic untuk menekan suara in-app jika user ada di room yang sama atau notifikasi dimatikan
+      const shouldSuppressSound = roomId === currentRoom?.id || notificationSettings[roomId] === false;
+      if (!shouldSuppressSound) {
         return total + (count || 0); // Pastikan count adalah angka
       }
       return total;
@@ -1131,6 +1150,8 @@ const AppContent: React.FC = () => {
     const previousTotal = prevTotalUnreadRef.current; 
     const now = Date.now();
     
+    // Periksa: 1. Jumlah pesan belum dibaca bertambah? 2. Total pesan belum dibaca > 0? 3. Delay sound sudah lewat?
+    // Catatan: Logic untuk menekan suara di room saat ini sudah ada di dalam useMemo totalUnreadCount
     if (currentTotal > previousTotal && previousTotal > 0 && (now - lastSoundPlayTimeRef.current) > 1000) { 
       playNotificationSound(); 
       lastSoundPlayTimeRef.current = now; 

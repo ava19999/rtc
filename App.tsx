@@ -105,7 +105,7 @@ const Particles: React.FC = () => (
 
 // Helper function to update native app state for push notification suppression
 const updateNativeRoomState = (roomId: string | null) => {
-    // Memanggil bridge method yang diasumsikan ada di MainActivity (Anda harus memastikan ini ada di sisi Android)
+    // Memanggil bridge method yang diasumsikan ada di MainActivity
     if (typeof (window as any).AndroidBridge?.setCurrentRoomId === 'function') {
       (window as any).AndroidBridge.setCurrentRoomId(roomId || '');
       console.log(`[Bridge] Current room ID set to: ${roomId || 'null'}`);
@@ -198,7 +198,7 @@ const AppContent: React.FC = () => {
     }
     
     setCurrentRoom(null);
-    updateNativeRoomState(null); // <-- TAMBAHKAN INI
+    updateNativeRoomState(null); // <-- Mengatur ID room menjadi null/empty string di native
 
     console.log(`Left room: ${roomId}, reset unread count, updated last visit, removed typing status.`);
   }, [currentRoom, database, firebaseUser]); 
@@ -268,12 +268,33 @@ const AppContent: React.FC = () => {
     }
   }, [database]);
 
+  // --- PERBAIKAN LOGIKA TOGGLE NOTIFIKASI ---
   const handleToggleNotification = useCallback((roomId: string, enabled: boolean) => {
     setNotificationSettings(prev => ({
       ...prev,
       [roomId]: enabled
     }));
-  }, []);
+    
+    // --- LOGIKA FCM SUBSCRIBE/UNSUBSCRIBE UNTUK TOGGLE PER ROOM ---
+    if (typeof (window as any).AndroidBridge?.subscribeToRoom === 'function' && !DEFAULT_ROOM_IDS.includes(roomId)) {
+        if (enabled) {
+            // SUBSCRIBE jika diaktifkan
+            (window as any).AndroidBridge.subscribeToRoom(roomId);
+            console.log(`[Bridge-FCM] Subscribed to topic for room: ${roomId}`);
+        } else {
+            // UNSUBSCRIBE jika dimatikan
+            (window as any).AndroidBridge.unsubscribeFromRoom(roomId);
+            console.log(`[Bridge-FCM] Unsubscribed from topic for room: ${roomId}`);
+        }
+    }
+    // -----------------------------------------------------------------
+
+    // Jika room yang di-toggle adalah room aktif, update native state agar supresi in-room bekerja
+    if (currentRoom?.id === roomId) {
+        updateNativeRoomState(roomId);
+    }
+  }, [currentRoom]);
+  // ------------------------------------------
 
   const fetchTrendingData = useCallback(async (showSkeleton = true) => {
     if (showSkeleton) { setIsTrendingLoading(true); setTrendingError(null); }
@@ -376,7 +397,7 @@ const AppContent: React.FC = () => {
 
   const handleLogout = useCallback(() => {
     leaveCurrentRoom();
-    updateNativeRoomState(null); // <-- TAMBAHKAN INI
+    updateNativeRoomState(null); // <-- Mengatur ID room menjadi null saat logout
     
     const auth = getAuth();
     signOut(auth)
@@ -478,12 +499,17 @@ const AppContent: React.FC = () => {
 
   const handleJoinRoom = useCallback((room: Room) => {
     setCurrentRoom(room);
-    updateNativeRoomState(room.id); // <-- TAMBAHKAN INI
+    updateNativeRoomState(room.id); // <-- Mengatur ID room ke room yang aktif di native
     
     // Panggil Android Bridge untuk subscribe
-    if (typeof (window as any).AndroidBridge?.subscribeToRoom === 'function') {
+    // HANYA SUBSCRIBE JIKA NOTIFIKASI TIDAK DIMATIKAN di local storage (notificationSettings)
+    const notificationsEnabled = room.id ? (notificationSettings[room.id] !== false) : true; // Defaultnya aktif
+    
+    if (typeof (window as any).AndroidBridge?.subscribeToRoom === 'function' && notificationsEnabled && !DEFAULT_ROOM_IDS.includes(room.id)) {
       (window as any).AndroidBridge.subscribeToRoom(room.id);
-      console.log(`[Bridge] Subscribed to topic: ${room.id}`);
+      console.log(`[Bridge-FCM] Subscribed to topic: ${room.id} on join.`);
+    } else {
+         console.log(`[Bridge-FCM] Subscription skipped for room: ${room.id} (Disabled or Default).`);
     }
 
     const isFirstTimeJoin = !hasJoinedRoom[room.id];
@@ -521,7 +547,7 @@ const AppContent: React.FC = () => {
         console.log(`[JOIN] onDisconnect set for typing status in room ${room.id} on join`);
        } catch(e) { console.error("[JOIN] Error setting onDisconnect on join:", e); }
      }
-  }, [updateRoomUserCount, hasJoinedRoom, database, firebaseUser]);
+  }, [updateRoomUserCount, hasJoinedRoom, database, firebaseUser, notificationSettings]);
   
   const handleLeaveRoom = useCallback(() => { 
     // Cukup panggil handleAndroidBackButton() untuk kembali
@@ -531,14 +557,16 @@ const AppContent: React.FC = () => {
   const handleLeaveJoinedRoom = useCallback((roomId: string) => {
     if (DEFAULT_ROOM_IDS.includes(roomId)) return;
     
-    // Panggil Android Bridge untuk unsubscribe
+    // Panggil Android Bridge untuk unsubscribe - SELALU UNSUBSCRIBE DARI TOPIK SAAT LEAVE PERMANEN.
     if (typeof (window as any).AndroidBridge?.unsubscribeFromRoom === 'function') {
       (window as any).AndroidBridge.unsubscribeFromRoom(roomId);
-      console.log(`[Bridge] Unsubscribed from topic: ${roomId}`);
+      console.log(`[Bridge] Unsubscribed from topic: ${roomId} on permanent leave.`);
     }
     
     if (currentRoom?.id === roomId) { 
-      updateNativeRoomState(null); // <-- TAMBAHKAN PADA LEAVE JOINED JIKA INI ROOM AKTIF
+      // Jika room aktif yang ditinggalkan, clear native state melalui leaveCurrentRoom
+      leaveCurrentRoom();
+      setPageHistory(prev => prev.slice(0, -1)); // Kembali ke halaman sebelumnya
     }
 
     if (hasJoinedRoom[roomId]) {
@@ -567,10 +595,6 @@ const AppContent: React.FC = () => {
        } catch(e) { console.error("Error removing typing status on leave joined (outer):", e); }
      }
     
-    if (currentRoom?.id === roomId) { 
-      leaveCurrentRoom();
-      setPageHistory(prev => prev.slice(0, -1)); // Kembali ke halaman sebelumnya
-    }
   }, [currentRoom, leaveCurrentRoom, updateRoomUserCount, hasJoinedRoom, database, firebaseUser]);
 
   const handleCreateRoom = useCallback((roomName: string) => {
@@ -948,7 +972,7 @@ const AppContent: React.FC = () => {
       } else {
         if (currentUser !== null) setCurrentUser(null);
         setPendingGoogleUser(null);
-        updateNativeRoomState(null); // <-- TAMBAHKAN INI UNTUK CLEAR NATIVE STATE SAAT LOGOUT
+        updateNativeRoomState(null); // <-- Mengatur ID room menjadi null saat sesi berakhir
       }
       setIsAuthLoading(false);
     });
@@ -1132,32 +1156,33 @@ const AppContent: React.FC = () => {
 
   // --- MEMOIZED VALUES & NOTIFIKASI SUARA ---
 
-  // **SOLUSI:** Pindahkan definisi `totalUnreadCount` ke SINI
+  // Logika total unread count untuk MENGHINDARI SUARA/UNREAD JIKA:
+  // 1. Sedang di room tersebut (roomId == currentRoom?.id)
+  // 2. Notifikasi room dimatikan (notificationSettings[roomId] == false)
   const totalUnreadCount = useMemo(() => {
     return Object.entries(unreadCounts).reduce((total, [roomId, count]) => {
-      // Logic untuk menekan suara in-app jika user ada di room yang sama atau notifikasi dimatikan
-      const shouldSuppressSound = roomId === currentRoom?.id || notificationSettings[roomId] === false;
-      if (!shouldSuppressSound) {
-        return total + (count || 0); // Pastikan count adalah angka
+      const isViewingCurrentRoom = roomId === currentRoom?.id;
+      const isNotificationDisabled = notificationSettings[roomId] === false;
+      
+      if (!isViewingCurrentRoom && !isNotificationDisabled) {
+        return total + (count || 0);
       }
       return total;
     }, 0);
   }, [unreadCounts, notificationSettings, currentRoom]);
 
-  // **SOLUSI:** SEKARANG `useEffect` ini berada SETELAH `totalUnreadCount` didefinisikan
+  // **Efek untuk memutar suara in-app** (Mengikuti fungsi sound API)
   useEffect(() => {
     const currentTotal = totalUnreadCount; 
     const previousTotal = prevTotalUnreadRef.current; 
     const now = Date.now();
     
-    // Periksa: 1. Jumlah pesan belum dibaca bertambah? 2. Total pesan belum dibaca > 0? 3. Delay sound sudah lewat?
-    // Catatan: Logic untuk menekan suara di room saat ini sudah ada di dalam useMemo totalUnreadCount
     if (currentTotal > previousTotal && previousTotal > 0 && (now - lastSoundPlayTimeRef.current) > 1000) { 
       playNotificationSound(); 
       lastSoundPlayTimeRef.current = now; 
     }
     prevTotalUnreadRef.current = currentTotal;
-  }, [totalUnreadCount]); // Error TS2552 akan hilang
+  }, [totalUnreadCount]);
 
   const updatedRooms = useMemo(() => {
     return rooms.map(room => ({ ...room, userCount: roomUserCounts[room.id] || room.userCount || 0 }));

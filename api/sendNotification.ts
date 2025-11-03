@@ -22,6 +22,9 @@ try {
   console.error('Firebase Admin Initialization Error', e.message);
 }
 
+// Tambahkan daftar room default di sisi server (untuk keamanan)
+const DEFAULT_ROOM_IDS = ['berita-kripto', 'pengumuman-aturan'];
+
 export default async (req: VercelRequest, res: VercelResponse) => {
   if (req.method !== 'POST') {
     return res.status(405).send('Method Not Allowed');
@@ -36,8 +39,8 @@ export default async (req: VercelRequest, res: VercelResponse) => {
       return res.status(400).send('Missing required fields: roomId, sender, text');
     }
 
-    // 2. Jangan kirim notifikasi untuk room default
-    if (roomId === 'berita-kripto' || roomId === 'pengumuman-aturan') {
+    // 2. Jangan kirim notifikasi untuk room default (diperbaiki)
+    if (DEFAULT_ROOM_IDS.includes(roomId)) {
       console.log('Default room, no notification sent.');
       return res.status(200).send('Default room, no notification sent.');
     }

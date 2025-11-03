@@ -1,4 +1,4 @@
-// App.tsx
+// ava19999/rtc/rtc-359b1d279252d2986608db0247eaacde229da3aa/App.tsx
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { GoogleOAuthProvider, CredentialResponse } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
@@ -268,26 +268,25 @@ const AppContent: React.FC = () => {
     }
   }, [database]);
 
-  // --- PERBAIKAN LOGIKA TOGGLE NOTIFIKASI ---
+  // --- PERBAIKAN LOGIKA TOGGLE NOTIFIKASI (MENGATUR FCM SUBSCRIBE/UNSUBSCRIBE) ---
   const handleToggleNotification = useCallback((roomId: string, enabled: boolean) => {
     setNotificationSettings(prev => ({
       ...prev,
       [roomId]: enabled
     }));
     
-    // --- LOGIKA FCM SUBSCRIBE/UNSUBSCRIBE UNTUK TOGGLE PER ROOM ---
+    // LOGIKA FCM SUBSCRIBE/UNSUBSCRIBE UNTUK TOGGLE PER ROOM
     if (typeof (window as any).AndroidBridge?.subscribeToRoom === 'function' && !DEFAULT_ROOM_IDS.includes(roomId)) {
         if (enabled) {
-            // SUBSCRIBE jika diaktifkan
+            // SUBSCRIBE jika diaktifkan (Default: true)
             (window as any).AndroidBridge.subscribeToRoom(roomId);
             console.log(`[Bridge-FCM] Subscribed to topic for room: ${roomId}`);
         } else {
-            // UNSUBSCRIBE jika dimatikan
+            // UNSUBSCRIBE jika dimatikan (false)
             (window as any).AndroidBridge.unsubscribeFromRoom(roomId);
             console.log(`[Bridge-FCM] Unsubscribed from topic for room: ${roomId}`);
         }
     }
-    // -----------------------------------------------------------------
 
     // Jika room yang di-toggle adalah room aktif, update native state agar supresi in-room bekerja
     if (currentRoom?.id === roomId) {
@@ -1083,6 +1082,7 @@ const AppContent: React.FC = () => {
     return () => { if (database) off(messagesRef, 'value', listener); };
   }, [currentRoom, database]);
 
+  // --- PERBAIKAN LOGIKA UNREAD COUNT (MEMASTIKAN PESAN SENDIRI TIDAK DIHITUNG) ---
   useEffect(() => {
     if (!database) return;
     Object.values(roomListenersRef.current).forEach(unsubscribe => { if (typeof unsubscribe === 'function') { unsubscribe(); } });
@@ -1094,20 +1094,35 @@ const AppContent: React.FC = () => {
         const data = snapshot.val();
         if (!data) { setUnreadCounts(prev => ({ ...prev, [roomId]: 0 })); return; }
         const lastVisit = userLastVisit[roomId] || 0;
-        let newMessagesCount = 0; let hasNewMessageFromOthers = false;
+        let newMessagesCount = 0; 
+        let hasNewMessageFromOthers = false;
+        
         Object.values(data).forEach((msgData: any) => {
           if (!msgData) return;
           const timestamp = msgData.published_on ? msgData.published_on * 1000 : msgData.timestamp;
-          const sender = msgData.sender; const isCurrentUser = sender === currentUser?.username;
-          if (timestamp > lastVisit && !isCurrentUser && roomId !== currentRoom?.id) { newMessagesCount++; hasNewMessageFromOthers = true; }
+          const sender = msgData.sender; 
+          const isCurrentUser = sender === currentUser?.username; // <-- Cek pesan sendiri
+
+          // Hanya hitung jika: pesan baru, dan BUKAN dari user saat ini, dan room BUKAN room aktif
+          if (timestamp > lastVisit && !isCurrentUser && roomId !== currentRoom?.id) { 
+            newMessagesCount++; 
+            hasNewMessageFromOthers = true; 
+          }
         });
-        if (hasNewMessageFromOthers && roomId !== currentRoom?.id) { setUnreadCounts(prev => ({ ...prev, [roomId]: newMessagesCount })); } 
-        else { setUnreadCounts(prev => ({ ...prev, [roomId]: 0 })); }
+        
+        // Atur count: jika ada pesan baru dari orang lain DAN user tidak di room
+        if (hasNewMessageFromOthers && roomId !== currentRoom?.id) { 
+            setUnreadCounts(prev => ({ ...prev, [roomId]: newMessagesCount })); 
+        } 
+        else { 
+            setUnreadCounts(prev => ({ ...prev, [roomId]: 0 })); 
+        }
       }, (error) => { console.error(`Listener error untuk room ${roomId}:`, error); });
       roomListenersRef.current[roomId] = () => off(messagesRef, 'value', listener);
     });
     return () => { Object.values(roomListenersRef.current).forEach(unsubscribe => { if (typeof unsubscribe === 'function') { unsubscribe(); } }); roomListenersRef.current = {}; };
   }, [joinedRoomIds, currentRoom, database, userLastVisit, currentUser]);
+  // ------------------------------------------------------------------------
 
   useEffect(() => {
     if (!database) { console.warn("Typing listener skipped: DB not initialized."); return; }

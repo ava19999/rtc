@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "noImplicitAny": true,
+    "module": "esnext",
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "node"],
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "resolveJsonModule": true
+  },
+  "include": [
+    "./*.ts",
+    "./*.tsx",
+    "./components/**/*.ts",
+    "./components/**/*.tsx",
+    "./services/**/*.ts",
+    "./services/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "vite.config.ts"
+  ]
+}

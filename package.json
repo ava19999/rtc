@@ -1,0 +1,30 @@
+{
+  "name": "ruang-tunggu-crypto",
+  "version": "1.0.0",
+  "description": "Ruang Tunggu Crypto: Forum Analisis Cuan. Deteksi peluang profit berikutnya di pasar kripto dengan analisis AI canggih dan data real-time.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@google/genai": "^1.27.0",
+    "@react-oauth/google": "^0.12.1",
+    "firebase": "^12.4.0",
+    "firebase-admin": "^13.5.0",
+    "jwt-decode": "^4.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vercel/node": "^5.5.3",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.13"
+  }
+}

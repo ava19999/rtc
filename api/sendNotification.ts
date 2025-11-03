@@ -59,7 +59,7 @@ export default async (req: VercelRequest, res: VercelResponse) => {
     // 4. Potong pesan jika terlalu panjang
     const body = text.length > 100 ? text.substring(0, 97) + '...' : text;
 
-    // 5. Buat payload notifikasi dengan topic
+    // 5. Buat payload notifikasi dengan data yang lebih lengkap
     const message = {
       notification: {
         title: `Pesan baru di #${roomName}`,
@@ -67,12 +67,16 @@ export default async (req: VercelRequest, res: VercelResponse) => {
       },
       data: {
         roomId: roomId,
+        sender: sender, // Tambahkan sender ke data
+        messageText: text,
+        roomName: roomName,
+        timestamp: Date.now().toString()
       },
-      topic: roomId // Menambahkan topic di sini
+      topic: roomId
     };
     
     // 6. Kirim menggunakan metode send yang benar
-    console.log(`Sending notification to topic: ${roomId}`);
+    console.log(`Sending notification to topic: ${roomId}, from sender: ${sender}`);
     
     await admin.messaging().send(message);
 

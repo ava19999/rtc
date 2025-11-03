@@ -105,11 +105,27 @@ const Particles: React.FC = () => (
 
 // Helper function to update native app state for push notification suppression
 const updateNativeRoomState = (roomId: string | null) => {
-    // Memanggil bridge method yang diasumsikan ada di MainActivity
-    if (typeof (window as any).AndroidBridge?.setCurrentRoomId === 'function') {
-      (window as any).AndroidBridge.setCurrentRoomId(roomId || '');
-      console.log(`[Bridge] Current room ID set to: ${roomId || 'null'}`);
-    }
+  // Memanggil bridge method yang ada di MainActivity
+  if (typeof (window as any).AndroidBridge?.setCurrentRoomId === 'function') {
+    (window as any).AndroidBridge.setCurrentRoomId(roomId || '');
+    console.log(`[Bridge] Current room ID set to: ${roomId || 'null'}`);
+  }
+};
+
+// Helper function to update native user state
+const updateNativeUserState = (userId: string | null) => {
+  if (typeof (window as any).AndroidBridge?.setCurrentUserId === 'function') {
+    (window as any).AndroidBridge.setCurrentUserId(userId || '');
+    console.log(`[Bridge] Current user ID set to: ${userId || 'null'}`);
+  }
+};
+
+// Helper function to update native sound settings
+const updateNativeSoundState = (enabled: boolean) => {
+  if (typeof (window as any).AndroidBridge?.setNotificationSoundEnabled === 'function') {
+    (window as any).AndroidBridge.setNotificationSoundEnabled(enabled);
+    console.log(`[Bridge] Notification sound set to: ${enabled}`);
+  }
 };
 
 const AppContent: React.FC = () => {
@@ -178,7 +194,6 @@ const AppContent: React.FC = () => {
   const sessionJoinedRooms = useRef<Set<string>>(new Set());
   // --------------------------------------------------------------------------------------
 
-
   // --- FUNCTION DEFINITIONS (useCallback) ---
   
   const leaveCurrentRoom = useCallback(() => {
@@ -209,7 +224,7 @@ const AppContent: React.FC = () => {
     updateNativeRoomState(null); // <-- Mengatur ID room menjadi null/empty string di native
 
     console.log(`Left room: ${roomId}, reset unread count, updated last visit, removed typing status.`);
-  }, [currentRoom, database, firebaseUser]); 
+  }, [currentRoom, database, firebaseUser]);
 
   const handleAndroidLoginToken = useCallback(async (idToken: string) => {
     console.log("handleAndroidLoginToken dipanggil dengan token.");
@@ -235,6 +250,9 @@ const AppContent: React.FC = () => {
             setCurrentUser(existingAppUser);
             setPendingGoogleUser(null);
             setPageHistory(['home']); // Reset history
+            
+            // UPDATE NATIVE USER STATE SETELAH LOGIN
+            updateNativeUserState(existingAppUser.username);
           } else {
             console.log("User baru, mengarahkan ke CreateIdPage...");
             setPendingGoogleUser({ email, name, picture });
@@ -283,6 +301,9 @@ const AppContent: React.FC = () => {
       [roomId]: enabled
     }));
     
+    // KIRIM PENGATURAN SUARA KE NATIVE
+    updateNativeSoundState(enabled);
+    
     // LOGIKA FCM SUBSCRIBE/UNSUBSCRIBE UNTUK TOGGLE PER ROOM
     if (typeof (window as any).AndroidBridge?.subscribeToRoom === 'function' && !DEFAULT_ROOM_IDS.includes(roomId)) {
         if (enabled) {
@@ -301,7 +322,6 @@ const AppContent: React.FC = () => {
         updateNativeRoomState(roomId);
     }
   }, [currentRoom]);
-  // ------------------------------------------
 
   const fetchTrendingData = useCallback(async (showSkeleton = true) => {
     if (showSkeleton) { setIsTrendingLoading(true); setTrendingError(null); }
@@ -358,6 +378,9 @@ const AppContent: React.FC = () => {
             setCurrentUser(existingAppUser);
             setPendingGoogleUser(null);
             setPageHistory(['home']); // <-- RESET HISTORY
+            
+            // UPDATE NATIVE USER STATE SETELAH LOGIN
+            updateNativeUserState(existingAppUser.username);
           } else {
             setPendingGoogleUser({ email, name, picture });
             if (currentUser) setCurrentUser(null);
@@ -400,12 +423,19 @@ const AppContent: React.FC = () => {
     setCurrentUser(newUser);
     setPendingGoogleUser(null);
     setPageHistory(['home']); // <-- RESET HISTORY
+
+    // KIRIM USERNAME KE NATIVE UNTUK SUPRESI NOTIFIKASI
+    updateNativeUserState(username);
+
   }, [users, pendingGoogleUser, firebaseUser]);
 
   const handleLogout = useCallback(() => {
     leaveCurrentRoom();
     updateNativeRoomState(null); // <-- Mengatur ID room menjadi null saat logout
     
+    // RESET USER ID DI NATIVE SAAT LOGOUT
+    updateNativeUserState(null);
+
     const auth = getAuth();
     signOut(auth)
       .then(() => {
@@ -486,7 +516,6 @@ const AppContent: React.FC = () => {
     return false; // TIDAK DITANGANI
   }, [pageHistory, leaveCurrentRoom, searchedCoin, handleResetToTrending]);
 
-
   // --- PERBAIKAN: TAMBAHKAN useEffect DI SINI ---
   // Ini akan mengekspos fungsi React ke aplikasi Android
   useEffect(() => {
@@ -500,9 +529,7 @@ const AppContent: React.FC = () => {
       delete (window as any).handleAndroidLoginToken;
       delete (window as any).handleAndroidBackButton;
     };
-  }, [handleAndroidLoginToken, handleAndroidBackButton]); // <-- Tambahkan dependensi
-  // --- AKHIR PERBAIKAN ---
-
+  }, [handleAndroidLoginToken, handleAndroidBackButton]);
 
   const handleJoinRoom = useCallback((room: Room) => {
     setCurrentRoom(room);
@@ -981,6 +1008,10 @@ const AppContent: React.FC = () => {
           if (!currentUser || currentUser.email !== appUser.email) {
             setCurrentUser(appUser);
             setPendingGoogleUser(null);
+            
+            // UPDATE NATIVE USER STATE SETELAH AUTH STATE BERUBAH
+            updateNativeUserState(appUser.username);
+            
              if (database && currentRoom?.id) {
                try {
                  const typingRef = safeRef(`typing/${currentRoom.id}/${user.uid}`);
@@ -996,6 +1027,7 @@ const AppContent: React.FC = () => {
         if (currentUser !== null) setCurrentUser(null);
         setPendingGoogleUser(null);
         updateNativeRoomState(null); // <-- Mengatur ID room menjadi null saat sesi berakhir
+        updateNativeUserState(null); // <-- Mengatur user ID menjadi null saat sesi berakhir
       }
       setIsAuthLoading(false);
     });
@@ -1146,7 +1178,6 @@ const AppContent: React.FC = () => {
     });
     return () => { Object.values(roomListenersRef.current).forEach(unsubscribe => { if (typeof unsubscribe === 'function') { unsubscribe(); } }); roomListenersRef.current = {}; };
   }, [joinedRoomIds, currentRoom, database, userLastVisit, currentUser]);
-  // ------------------------------------------------------------------------
 
   useEffect(() => {
     if (!database) { console.warn("Typing listener skipped: DB not initialized."); return; }

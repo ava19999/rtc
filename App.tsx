@@ -1,4 +1,4 @@
-// ava19999/rtc/rtc-359b1d279252d2986608db0247eaacde229da3aa/App.tsx
+// App.tsx
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { GoogleOAuthProvider, CredentialResponse } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
@@ -173,6 +173,11 @@ const AppContent: React.FC = () => {
   const roomListenersRef = useRef<{ [roomId: string]: () => void }>({});
   const lastProcessedTimestampsRef = useRef<{ [roomId: string]: number }>({});
   const userSentMessagesRef = useRef<Set<string>>(new Set());
+  
+  // --- PERBAIKAN UTAMA: SESSION TRACKER UNTUK USER COUNT (MENCEGAH PENAMBAHAN GANDA) ---
+  const sessionJoinedRooms = useRef<Set<string>>(new Set());
+  // --------------------------------------------------------------------------------------
+
 
   // --- FUNCTION DEFINITIONS (useCallback) ---
   
@@ -181,6 +186,9 @@ const AppContent: React.FC = () => {
     
     const currentTime = Date.now();
     const roomId = currentRoom.id;
+    
+    // CATATAN: Fungsi ini HANYA menangani navigasi antar-halaman.
+    // Penghitung userCount TIDAK DI DECREMENT di sini.
     
     setUserLastVisit(prev => ({
       ...prev,
@@ -517,8 +525,16 @@ const AppContent: React.FC = () => {
     setPageHistory(prev => [...prev, 'forum']); // Navigasi ke 'forum'
     
     if (!room.isDefaultRoom) {
-      updateRoomUserCount(room.id, true);
-      console.log(`[handleJoinRoom] Incremented user count for room: ${room.id}`);
+      // --- LOGIKA PERBAIKAN USER COUNT INCREMENT ---
+      // Hanya increment jika room belum di-join di SESI INI.
+      if (!sessionJoinedRooms.current.has(room.id)) {
+          updateRoomUserCount(room.id, true); 
+          console.log(`[handleJoinRoom] Incremented user count for room: ${room.id}`);
+          sessionJoinedRooms.current.add(room.id); // Tandai sudah dihitung di sesi ini
+      } else {
+          console.log(`[handleJoinRoom] User already accounted for in this session: ${room.id}`);
+      }
+      // ---------------------------------------------
 
       if (isFirstTimeJoin) {
         setHasJoinedRoom(prev => ({
@@ -562,21 +578,26 @@ const AppContent: React.FC = () => {
       console.log(`[Bridge] Unsubscribed from topic: ${roomId} on permanent leave.`);
     }
     
-    if (currentRoom?.id === roomId) { 
-      // Jika room aktif yang ditinggalkan, clear native state melalui leaveCurrentRoom
-      leaveCurrentRoom();
-      setPageHistory(prev => prev.slice(0, -1)); // Kembali ke halaman sebelumnya
-    }
-
+    // --- LOGIKA PERBAIKAN USER COUNT DECREMENT (SAMA DENGAN SEBELUMNYA, DIVERIFIKASI SUDAH BENAR) ---
     if (hasJoinedRoom[roomId]) {
-      updateRoomUserCount(roomId, false);
+      updateRoomUserCount(roomId, false); // <-- User count di-decrement
       console.log(`[handleLeaveJoinedRoom] Decremented user count for room: ${roomId}`);
       setHasJoinedRoom(prev => ({
         ...prev,
         [roomId]: false
       }));
     }
+    // --------------------------------------------------------------------------------------------------
     
+    // --- PERBAIKAN: HAPUS FLAG SESI AGAR BISA INCREMENT LAGI JIKA RE-JOIN PERMANEN ---
+    sessionJoinedRooms.current.delete(roomId); // <-- Hapus flag sesi
+    
+    if (currentRoom?.id === roomId) { 
+      // Jika room aktif yang ditinggalkan, clear native state melalui leaveCurrentRoom
+      leaveCurrentRoom();
+      setPageHistory(prev => prev.slice(0, -1)); // Kembali ke halaman sebelumnya
+    }
+
     setJoinedRoomIds(prev => { const newIds = new Set(prev); newIds.delete(roomId); return newIds; });
     setUnreadCounts(prev => { const newCounts = { ...prev }; delete newCounts[roomId]; return newCounts; });
     setUserLastVisit(prev => { const newVisits = { ...prev }; delete newVisits[roomId]; return newVisits; });
@@ -724,6 +745,9 @@ const AppContent: React.FC = () => {
               leaveCurrentRoom();
               setPageHistory(prev => prev.slice(0, -1)); // Kembali
             }
+            
+            // Hapus flag sesi saat room dihapus
+            sessionJoinedRooms.current.delete(roomId);
           })
           .catch(error => {
             console.error(`Gagal menghapus room ${roomId}:`, error);
@@ -1082,7 +1106,7 @@ const AppContent: React.FC = () => {
     return () => { if (database) off(messagesRef, 'value', listener); };
   }, [currentRoom, database]);
 
-  // --- PERBAIKAN LOGIKA UNREAD COUNT (MEMASTIKAN PESAN SENDIRI TIDAK DIHITUNG) ---
+  // --- LOGIKA UNREAD COUNT (MEMASTIKAN PESAN SENDIRI DAN DI ROOM AKTIF TIDAK DIHITUNG) ---
   useEffect(() => {
     if (!database) return;
     Object.values(roomListenersRef.current).forEach(unsubscribe => { if (typeof unsubscribe === 'function') { unsubscribe(); } });

@@ -1,4 +1,3 @@
-// ava19999/rtc/rtc-121158703ba1de3783ee9674e9db07ff7d573cd3/components/CreateIdPage.tsx
 import React, { useState } from 'react';
 import type { CreateIdPageProps } from '../types';
 
@@ -8,7 +7,6 @@ const CreateIdPage: React.FC<CreateIdPageProps> = ({ onProfileComplete, googlePr
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    // --- FUNGSI handleSubmit TELAH DIPERBAIKI ---
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const trimmedUsername = username.trim();
@@ -17,10 +15,14 @@ const CreateIdPage: React.FC<CreateIdPageProps> = ({ onProfileComplete, googlePr
             setError('Username dan kata sandi tidak boleh kosong.');
             return;
         }
-        if (trimmedUsername.length < 3) {
-            setError('Username minimal harus 3 karakter.');
+        
+        // --- PERUBAHAN DI SINI ---
+        if (trimmedUsername.length < 4) { 
+            setError('Username minimal harus 4 karakter.'); // <-- Pesan diubah
             return;
         }
+        // --- AKHIR PERUBAHAN ---
+
         if (trimmedUsername.length > 15) {
             setError('Username maksimal 15 karakter.');
             return;
@@ -38,23 +40,16 @@ const CreateIdPage: React.FC<CreateIdPageProps> = ({ onProfileComplete, googlePr
         setIsLoading(true);
 
         try {
-            // Panggil onProfileComplete
             const result = await onProfileComplete(trimmedUsername, password);
             
             if (result) {
-                // Jika onProfileComplete mengembalikan string error (misal: username duplikat)
                 setError(result);
             }
-            // Jika sukses (result adalah void/undefined), App.tsx akan
-            // mengganti halaman. Komponen ini akan di-unmount.
             
         } catch (err: any) {
-            // Menangani jika onProfileComplete melempar error
             console.error("Kesalahan tak terduga saat pendaftaran:", err);
             setError(err.message || 'Terjadi kesalahan tak terduga.');
         } finally {
-            // PENTING: Selalu set loading ke false setelah selesai.
-            // Ini akan meng-unlock tombol jika terjadi error.
             setIsLoading(false);
         }
     };
@@ -80,7 +75,7 @@ const CreateIdPage: React.FC<CreateIdPageProps> = ({ onProfileComplete, googlePr
                             placeholder="Buat Username Anda"
                             className="w-full bg-white/5 border border-white/10 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-electric transition-all text-center"
                             aria-label="Buat Username"
-                            disabled={isLoading} // Tambahkan disabled saat loading
+                            disabled={isLoading}
                         />
                     </div>
                      <div>
@@ -91,7 +86,7 @@ const CreateIdPage: React.FC<CreateIdPageProps> = ({ onProfileComplete, googlePr
                             placeholder="Buat Kata Sandi"
                             className="w-full bg-white/5 border border-white/10 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-electric transition-all text-center"
                             aria-label="Buat Kata Sandi"
-                            disabled={isLoading} // Tambahkan disabled saat loading
+                            disabled={isLoading}
                         />
                     </div>
                     {error && <p className="text-magenta text-sm mt-2">{error}</p>}

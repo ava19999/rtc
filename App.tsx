@@ -420,13 +420,15 @@ const AppContent: React.FC = () => {
       return errorMsg;
     }
 
+    // --- PERBAIKAN DI SINI: 'password' dihapus dari objek newUser ---
     const newUser: User = {
       email: pendingGoogleUser.email,
       username,
-      password,
+      // password, // <-- DIHAPUS
       googleProfilePicture: pendingGoogleUser.picture,
       createdAt: Date.now()
     };
+    // --- AKHIR PERBAIKAN ---
 
     setUsers(prev => ({ ...prev, [newUser.email]: newUser }));
     setCurrentUser(newUser);

@@ -337,6 +337,15 @@ const AppContent: React.FC = () => {
     setSearchedCoin(null);
   }, []);
 
+  // --- FUNGSI BARU UNTUK REFRESH ---
+  const handleReloadPage = useCallback(() => {
+    // window.location.reload() berfungsi baik di web maupun di WebView
+    // untuk memuat ulang seluruh sumber daya web.
+    console.log("Reload page requested by user.");
+    window.location.reload();
+  }, []);
+  // --------------------------------
+
   const fetchAndStoreNews = useCallback(async () => {
     try {
       const fetchedArticles = await fetchNewsArticles();
@@ -721,6 +730,7 @@ const AppContent: React.FC = () => {
     }
   }, [handleJoinRoom, rooms, currentUser, database, firebaseUser]);
 
+  // --- PERUBAHAN DI SINI: Menghapus window.confirm ---
   const handleDeleteRoom = useCallback((roomId: string) => {
     if (!currentUser?.username || !firebaseUser?.uid) {
       console.warn('Delete room prerequisites failed (user).');
@@ -747,7 +757,8 @@ const AppContent: React.FC = () => {
         return;
       }
 
-      if (window.confirm(`Anda yakin ingin menghapus room "${roomToDelete.name}" secara permanen? Semua pesan di dalamnya akan hilang.`)) {
+      // Hapus konfirmasi `window.confirm`
+      // if (window.confirm(`Anda yakin ingin menghapus room "${roomToDelete.name}" secara permanen? Semua pesan di dalamnya akan hilang.`)) {
         
         // Unsubscribe dari topik sebelum dihapus
         if (typeof (window as any).AndroidBridge?.unsubscribeFromRoom === 'function') {
@@ -780,12 +791,13 @@ const AppContent: React.FC = () => {
             console.error(`Gagal menghapus room ${roomId}:`, error);
             alert('Gagal menghapus room. Periksa koneksi atau izin Anda.');
           });
-      }
+      // } // <-- Penutup if yang dihapus
     } catch (error) {
       console.error('Error in handleDeleteRoom (logic error):', error);
       alert('Terjadi kesalahan saat menghapus room.');
     }
   }, [currentUser, rooms, firebaseUser, currentRoom, leaveCurrentRoom]); 
+  // --- AKHIR PERUBAHAN ---
 
   const handleSendMessage = useCallback((message: Partial<ChatMessage>) => {
     if (!database || !currentRoom?.id || !firebaseUser?.uid || !currentUser?.username) {
@@ -1282,7 +1294,21 @@ const AppContent: React.FC = () => {
   const renderActivePage = () => {
     switch (activePage) {
       case 'home':
-        return <HomePage idrRate={idrRate} isRateLoading={isRateLoading} currency={currency} onIncrementAnalysisCount={handleIncrementAnalysisCount} fullCoinList={fullCoinList} isCoinListLoading={isCoinListLoading} coinListError={coinListError} heroCoin={heroCoin} otherTrendingCoins={otherTrendingCoins} isTrendingLoading={isTrendingLoading} trendingError={trendingError} onSelectCoin={handleSelectCoin} onReloadTrending={handleResetToTrending} />;
+        return <HomePage 
+                  idrRate={idrRate} 
+                  isRateLoading={isRateLoading} 
+                  currency={currency} 
+                  onIncrementAnalysisCount={handleIncrementAnalysisCount} 
+                  fullCoinList={fullCoinList} 
+                  isCoinListLoading={isCoinListLoading} 
+                  coinListError={coinListError} 
+                  heroCoin={heroCoin} 
+                  otherTrendingCoins={otherTrendingCoins} 
+                  isTrendingLoading={isTrendingLoading} 
+                  trendingError={trendingError} 
+                  onSelectCoin={handleSelectCoin} 
+                  onReloadTrending={handleReloadPage} 
+                />;
       case 'rooms':
         return <RoomsListPage 
           rooms={updatedRooms} onJoinRoom={handleJoinRoom} onCreateRoom={handleCreateRoom} totalUsers={totalUsers} hotCoin={hotCoinForHeader} userProfile={currentUser} currentRoomId={currentRoom?.id || null} joinedRoomIds={joinedRoomIds} onLeaveJoinedRoom={handleLeaveJoinedRoom} unreadCounts={unreadCounts} onDeleteRoom={handleDeleteRoom} onToggleNotification={handleToggleNotification} notificationSettings={notificationSettings} />;

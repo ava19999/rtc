@@ -15,7 +15,7 @@ export interface GoogleProfile {
 export interface User {
   email: string;
   username: string;
-  password?: string;
+  // password?: string; // <-- PERBAIKAN: Dihapus untuk keamanan
   googleProfilePicture?: string;
   createdAt: number;
 }

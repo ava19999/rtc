@@ -1,7 +1,6 @@
 // App.tsx
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-// --- PERBAIKAN: Hapus impor GoogleOAuthProvider ---
-import { CredentialResponse } from '@react-oauth/google'; 
+import { GoogleOAuthProvider, CredentialResponse } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import {
   getAuth,
@@ -421,15 +420,14 @@ const AppContent: React.FC = () => {
       return errorMsg;
     }
 
-    // --- PERBAIKAN DI SINI: 'password' dihapus dari objek newUser ---
+    // --- PERBAIKAN KEAMANAN: Hapus 'password' dari objek User ---
     const newUser: User = {
       email: pendingGoogleUser.email,
       username,
-      // password, // <-- DIHAPUS
+      // password, // <-- DIHAPUS. Jangan simpan password di state/localStorage.
       googleProfilePicture: pendingGoogleUser.picture,
       createdAt: Date.now()
     };
-    // --- AKHIR PERBAIKAN ---
 
     setUsers(prev => ({ ...prev, [newUser.email]: newUser }));
     setCurrentUser(newUser);
@@ -441,21 +439,25 @@ const AppContent: React.FC = () => {
 
   }, [users, pendingGoogleUser, firebaseUser]);
 
-  // --- PERBAIKAN FUNGSI LOGOUT ---
   const handleLogout = useCallback(() => {
     leaveCurrentRoom();
     updateNativeRoomState(null); // <-- Mengatur ID room menjadi null saat logout
-    updateNativeUserState(null); // <-- RESET USER ID DI NATIVE SAAT LOGOUT
     
-    setPageHistory(['home']); // <-- TAMBAHKAN INI
+    // RESET USER ID DI NATIVE SAAT LOGOUT
+    updateNativeUserState(null);
 
     const auth = getAuth();
-    signOut(auth).catch((error) => {
-        // Hanya log error. onAuthStateChanged akan menangani state UI.
+    signOut(auth)
+      .then(() => {
+        setPageHistory(['home']); // <-- RESET HISTORY
+      })
+      .catch((error) => {
         console.error('Firebase signOut error:', error);
+        setCurrentUser(null);
+        setFirebaseUser(null);
+        setPageHistory(['home']); // <-- RESET HISTORY
       });
   }, [leaveCurrentRoom]);
-  // --- AKHIR PERBAIKAN ---
 
   const handleIncrementAnalysisCount = useCallback((coinId: string) => {
     setAnalysisCounts(prev => {
@@ -559,7 +561,7 @@ const AppContent: React.FC = () => {
     setJoinedRoomIds(prev => new Set(prev).add(room.id));
     setPageHistory(prev => [...prev, 'forum']); // Navigasi ke 'forum'
     
-    // --- PERBAIKAN ---
+    // --- PERBAIKAN LOGIKA USERCOUNT ---
     if (!room.isDefaultRoom) {
       // --- LOGIKA PERBAIKAN USER COUNT INCREMENT ---
       // Kita cek 'isFirstTimeJoin' (yang diambil dari localStorage state 'hasJoinedRoom')
@@ -627,7 +629,7 @@ const AppContent: React.FC = () => {
     // --------------------------------------------------------------------------------------------------
     
     // --- DIHAPUS ---
-    // sessionJoinedRooms.current.delete(roomId); // <-- Hapus flag sesi
+    // sessionJoinedRooms.current.delete(roomId);
     // ---------------
     
     if (currentRoom?.id === roomId) { 
@@ -732,7 +734,7 @@ const AppContent: React.FC = () => {
     }
   }, [handleJoinRoom, rooms, currentUser, database, firebaseUser]);
 
-  // --- PERUBAHAN DI SINI: Menghapus window.confirm ---
+  // --- PERBAIKAN DI SINI: Menghapus window.confirm ---
   const handleDeleteRoom = useCallback((roomId: string) => {
     if (!currentUser?.username || !firebaseUser?.uid) {
       console.warn('Delete room prerequisites failed (user).');
@@ -1006,7 +1008,7 @@ const AppContent: React.FC = () => {
   useEffect(() => { localStorage.setItem('userLastVisit', JSON.stringify(userLastVisit)); }, [userLastVisit]);
   useEffect(() => { try { localStorage.setItem('hasJoinedRoom', JSON.stringify(hasJoinedRoom)); } catch (e) { console.error('Gagal simpan hasJoinedRoom', e); } }, [hasJoinedRoom]);
 
-  // Efek untuk listener otentikasi Firebase
+  // --- PERBAIKAN: Efek untuk listener otentikasi Firebase ---
   useEffect(() => {
     if (!database) {
       console.warn('Firebase Auth listener skipped: Database not initialized.');
@@ -1020,40 +1022,34 @@ const AppContent: React.FC = () => {
       if (user) {
         const appUser = Object.values(users).find(u => u.email === user.email);
         if (appUser) {
-          if (!currentUser || currentUser.email !== appUser.email) {
-            setCurrentUser(appUser);
-            setPendingGoogleUser(null);
-            
-            // UPDATE NATIVE USER STATE SETELAH AUTH STATE BERUBAH
-            updateNativeUserState(appUser.username);
-            
-             if (database && currentRoom?.id) {
-               try {
-                 const typingRef = safeRef(`typing/${currentRoom.id}/${user.uid}`);
-                 onDisconnect(typingRef).remove();
-                 console.log(`[AUTH] onDisconnect set for typing status in room ${currentRoom.id}`);
-               } catch(e) { console.error("[AUTH] Error setting onDisconnect for typing status:", e); }
-             }
-          }
+          // Logika disederhanakan: Cukup set user-nya.
+          setCurrentUser(appUser);
+          setPendingGoogleUser(null);
+          
+          // UPDATE NATIVE USER STATE SETELAH AUTH STATE BERUBAH
+          updateNativeUserState(appUser.username);
+          
+            if (database && currentRoom?.id) {
+              try {
+                const typingRef = safeRef(`typing/${currentRoom.id}/${user.uid}`);
+                onDisconnect(typingRef).remove();
+                console.log(`[AUTH] onDisconnect set for typing status in room ${currentRoom.id}`);
+              } catch(e) { console.error("[AUTH] Error setting onDisconnect for typing status:", e); }
+            }
         } else if (!pendingGoogleUser) {
           console.warn('Auth listener: Firebase user exists but no matching app user found and not pending.');
         }
       } else {
-        // --- PERBAIKAN DI SINI ---
-        if (currentUser !== null) setCurrentUser(null);
+        // Logika disederhanakan: Cukup set null.
+        setCurrentUser(null); 
         setPendingGoogleUser(null);
         updateNativeRoomState(null); // <-- Mengatur ID room menjadi null saat sesi berakhir
         updateNativeUserState(null); // <-- Mengatur user ID menjadi null saat sesi berakhir
-        setPageHistory(['home']); // <-- TAMBAHKAN INI
-        // --- AKHIR PERBAIKAN ---
       }
       setIsAuthLoading(false);
     });
     return () => unsubscribe();
-    // --- PERBAIKAN DI SINI: Hapus currentUser dari dependency array ---
-  }, [users, pendingGoogleUser, database, currentRoom]);
-  // --- AKHIR PERBAIKAN ---
-
+  }, [users, pendingGoogleUser, database, currentRoom]); // <-- 'currentUser' DIHAPUS dari dependency array
 
   // Efek untuk mengambil data (API calls, dll)
   useEffect(() => { fetchTrendingData(); }, [fetchTrendingData]);
@@ -1387,10 +1383,11 @@ const AppContent: React.FC = () => {
   );
 };
 
-// --- PERBAIKAN KOMPONEN App ---
+// Komponen <App> Anda tetap utuh
 const App: React.FC = () => {
-  // Cek database. Ini diasumsikan diinisialisasi di firebaseService.ts
-  if (!database) {
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
+
+  if (!database && googleClientId) {
     return (
       <div style={{ color: 'white', backgroundColor: '#0A0A0A', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: 'sans-serif' }}>
         <div style={{ border: '1px solid #FF00FF', padding: '20px', borderRadius: '8px', textAlign: 'center', maxWidth: '500px' }}>
@@ -1403,9 +1400,24 @@ const App: React.FC = () => {
     );
   }
 
-  // Cukup render AppContent. 
-  // <GoogleOAuthProvider> sudah ditangani di index.tsx
-  return <AppContent />;
+  if (!googleClientId) {
+    return (
+      <div style={{ color: 'white', backgroundColor: '#0A0A0A', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: 'sans-serif' }}>
+        <div style={{ border: '1px solid #FF00FF', padding: '20px', borderRadius: '8px', textAlign: 'center', maxWidth: '500px' }}>
+          <h1 style={{ color: '#FF00FF', fontSize: '24px' }}>Kesalahan Konfigurasi</h1>
+          <p style={{ marginTop: '10px', lineHeight: '1.6' }}>
+            Variabel lingkungan <strong>GOOGLE_CLIENT_ID</strong> tidak ditemukan.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <GoogleOAuthProvider clientId={googleClientId}>
+      <AppContent />
+    </GoogleOAuthProvider>
+  );
 };
 
 export default App;

@@ -461,11 +461,9 @@ const ForumPage: React.FC<ForumPageProps> = ({
                     message={item} 
                     userProfile={senderProfile} 
                     onReact={onReact} 
-                    // --- PERUBAHAN DI SINI ---
                     onDeleteClick={() => { 
-                      onDeleteMessage(room.id!, item.id); 
+                      if (window.confirm('Yakin hapus pesan ini?')) onDeleteMessage(room.id!, item.id); 
                     }} 
-                    // --- AKHIR PERUBAHAN ---
                     canDelete={canDelete} 
                     isActive={isActive} 
                     showActions={showActions} 
@@ -482,11 +480,9 @@ const ForumPage: React.FC<ForumPageProps> = ({
                     article={item} 
                     username={username} 
                     onReact={onReact} 
-                    // --- PERUBAHAN DI SINI ---
                     onDeleteClick={() => { 
-                      onDeleteMessage(room.id!, item.id); 
+                      if (window.confirm('Yakin hapus berita ini?')) onDeleteMessage(room.id!, item.id); 
                     }} 
-                    // --- AKHIR PERUBAHAN ---
                     canDelete={canDeleteNews} 
                     isActive={isActive} 
                     showActions={showActions} 

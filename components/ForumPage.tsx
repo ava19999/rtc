@@ -147,7 +147,11 @@ const NewsMessage: React.FC<{
         </div>
         <div className="relative mt-0.5 px-0.5 flex justify-between items-start">
           <div className="flex-1 min-w-0"> <Reactions message={article} username={username} onReact={(emoji) => onReact(article.id, emoji)} /> </div>
-          <div className="relative flex-shrink-0"> <div className={`flex items-center gap-0.5 transition-opacity duration-200 ${showActions ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}> <ReactButton onClick={onReactButtonClick} /> {canDelete && <DeleteButton onClick={(e) => { e.stopPropagation(); onDeleteClick(); }} />} </div> </div>
+          <div className="relative flex-shrink-0"> <div className={`flex items-center gap-0.5 transition-opacity duration-200 ${showActions ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}> <ReactButton onClick={onReactButtonClick} /> 
+            {/* --- PERBAIKAN DI SINI --- */}
+            {canDelete && <DeleteButton onClick={(e) => { e.stopPropagation(); onDeleteClick(); }} />} 
+            {/* --- AKHIR PERBAIKAN --- */}
+          </div> </div>
         </div>
       </div>
     </div>
@@ -188,7 +192,11 @@ const UserMessage: React.FC<{
         <div className={`text-[10px] text-gray-500 mt-0.5 ${isCurrentUser ? 'text-right' : 'text-left'}`}> {new Date(message.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} </div>
         <div className="relative mt-0.5 px-0.5 flex justify-between items-start">
           <div className="flex-1 min-w-0"> <Reactions message={message} username={currentUsername} onReact={(emoji) => onReact(message.id, emoji)} /> </div>
-          <div className={`relative flex-shrink-0 ${isCurrentUser ? 'ml-0.5' : 'mr-0.5'}`}> <div className={`flex items-center gap-0.5 transition-opacity duration-200 ${showActions ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}> <ReactButton onClick={onReactButtonClick} /> {canDelete && <DeleteButton onClick={(e) => { e.stopPropagation(); onDeleteClick(); }} />} </div> </div>
+          <div className={`relative flex-shrink-0 ${isCurrentUser ? 'ml-0.5' : 'mr-0.5'}`}> <div className={`flex items-center gap-0.5 transition-opacity duration-200 ${showActions ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}> <ReactButton onClick={onReactButtonClick} /> 
+            {/* --- PERBAIKAN DI SINI --- */}
+            {canDelete && <DeleteButton onClick={(e) => { e.stopPropagation(); onDeleteClick(); }} />} 
+            {/* --- AKHIR PERBAIKAN --- */}
+          </div> </div>
         </div>
       </div>
     </div>
@@ -461,9 +469,11 @@ const ForumPage: React.FC<ForumPageProps> = ({
                     message={item} 
                     userProfile={senderProfile} 
                     onReact={onReact} 
+                    // --- PERBAIKAN DI SINI ---
                     onDeleteClick={() => { 
-                      if (window.confirm('Yakin hapus pesan ini?')) onDeleteMessage(room.id!, item.id); 
+                      onDeleteMessage(room.id!, item.id); 
                     }} 
+                    // --- AKHIR PERBAIKAN ---
                     canDelete={canDelete} 
                     isActive={isActive} 
                     showActions={showActions} 
@@ -480,9 +490,11 @@ const ForumPage: React.FC<ForumPageProps> = ({
                     article={item} 
                     username={username} 
                     onReact={onReact} 
+                    // --- PERBAIKAN DI SINI ---
                     onDeleteClick={() => { 
-                      if (window.confirm('Yakin hapus berita ini?')) onDeleteMessage(room.id!, item.id); 
+                      onDeleteMessage(room.id!, item.id); 
                     }} 
+                    // --- AKHIR PERBAIKAN ---
                     canDelete={canDeleteNews} 
                     isActive={isActive} 
                     showActions={showActions} 

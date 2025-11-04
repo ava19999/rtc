@@ -1,3 +1,4 @@
+// components/CreateIdPage.tsx
 import React, { useState } from 'react';
 import type { CreateIdPageProps } from '../types';
 
@@ -18,7 +19,7 @@ const CreateIdPage: React.FC<CreateIdPageProps> = ({ onProfileComplete, googlePr
         
         // --- PERUBAHAN DI SINI ---
         if (trimmedUsername.length < 4) { 
-            setError('Username minimal harus 4 karakter.'); // <-- Pesan diubah
+            setError('Username minimal harus 4 karakter.'); // <-- Diubah ke 4
             return;
         }
         // --- AKHIR PERUBAHAN ---

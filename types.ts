@@ -15,7 +15,7 @@ export interface GoogleProfile {
 export interface User {
   email: string;
   username: string;
-  // password?: string; // <-- PERBAIKAN: Dihapus untuk keamanan
+  // password?: string; // <-- SUDAH DIHAPUS (Bagus!)
   googleProfilePicture?: string;
   createdAt: number;
 }
@@ -71,7 +71,8 @@ export interface Room {
   name: string;
   userCount: number;
   createdBy?: string;
-  isDefaultRoom?: boolean; // Ditambahkan untuk identifikasi room default
+  createdById?: string; // <-- PERUBAHAN: DITAMBAHKAN
+  isDefaultRoom?: boolean;
 }
 
 export interface NewsArticle {
@@ -326,7 +327,7 @@ export interface AppState {
   currency: Currency;
   idrRate: number | null;
   isRateLoading: boolean;
-  users: { [email: string]: User };
+  // users: { [email: string]: User }; // <-- DIHAPUS
   currentUser: User | null;
   pendingGoogleUser: GoogleProfile | null;
   firebaseUser: any | null;
@@ -350,9 +351,8 @@ export interface AppState {
   newsArticles: NewsArticle[];
   notificationSettings: NotificationSettings;
   roomUserCounts: RoomUserCounts;
-  // forumActiveUsers: number; // <-- DIHAPUS
-  userActivities: UserActivityData; // Ditambahkan untuk tracking user aktif per room
-  typingUsers: TypingUsersMap; // Tambahkan state untuk typing users
+  userActivities: UserActivityData; 
+  typingUsers: TypingUsersMap; 
 }
 
 
@@ -382,6 +382,7 @@ export interface FirebaseRoomData {
     name: string;
     userCount: number;
     createdBy?: string;
+    createdById?: string; // <-- PERUBAHAN: DITAMBAHKAN
     createdAt?: number;
     isDefaultRoom?: boolean;
   };
@@ -449,7 +450,7 @@ export interface NavigationHandlers {
 
 // --- Local Storage Types ---
 export interface LocalStorageData {
-  cryptoUsers: string;
+  // cryptoUsers: string; // <-- DIHAPUS
   currentUser: string;
   joinedRoomIds: string;
   unreadCounts: string;
@@ -473,6 +474,7 @@ export interface RoomCreationData {
   name: string;
   userCount: number;
   createdBy: string;
+  createdById: string; // <-- PERUBAHAN: DITAMBAHKAN
   createdAt: number;
   isDefaultRoom?: boolean;
 }

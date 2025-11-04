@@ -1,6 +1,7 @@
 // App.tsx
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { GoogleOAuthProvider, CredentialResponse } from '@react-oauth/google';
+// --- PERBAIKAN: Hapus impor GoogleOAuthProvider ---
+import { CredentialResponse } from '@react-oauth/google'; 
 import { jwtDecode } from 'jwt-decode';
 import {
   getAuth,
@@ -1053,6 +1054,7 @@ const AppContent: React.FC = () => {
   }, [users, pendingGoogleUser, database, currentRoom]);
   // --- AKHIR PERBAIKAN ---
 
+
   // Efek untuk mengambil data (API calls, dll)
   useEffect(() => { fetchTrendingData(); }, [fetchTrendingData]);
   useEffect(() => {
@@ -1385,11 +1387,10 @@ const AppContent: React.FC = () => {
   );
 };
 
-// Komponen <App> Anda tetap utuh
+// --- PERBAIKAN KOMPONEN App ---
 const App: React.FC = () => {
-  const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
-
-  if (!database && googleClientId) {
+  // Cek database. Ini diasumsikan diinisialisasi di firebaseService.ts
+  if (!database) {
     return (
       <div style={{ color: 'white', backgroundColor: '#0A0A0A', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: 'sans-serif' }}>
         <div style={{ border: '1px solid #FF00FF', padding: '20px', borderRadius: '8px', textAlign: 'center', maxWidth: '500px' }}>
@@ -1402,24 +1403,9 @@ const App: React.FC = () => {
     );
   }
 
-  if (!googleClientId) {
-    return (
-      <div style={{ color: 'white', backgroundColor: '#0A0A0A', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: 'sans-serif' }}>
-        <div style={{ border: '1px solid #FF00FF', padding: '20px', borderRadius: '8px', textAlign: 'center', maxWidth: '500px' }}>
-          <h1 style={{ color: '#FF00FF', fontSize: '24px' }}>Kesalahan Konfigurasi</h1>
-          <p style={{ marginTop: '10px', lineHeight: '1.6' }}>
-            Variabel lingkungan <strong>GOOGLE_CLIENT_ID</strong> tidak ditemukan.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <GoogleOAuthProvider clientId={googleClientId}>
-      <AppContent />
-    </GoogleOAuthProvider>
-  );
+  // Cukup render AppContent. 
+  // <GoogleOAuthProvider> sudah ditangani di index.tsx
+  return <AppContent />;
 };
 
 export default App;

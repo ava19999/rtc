@@ -190,20 +190,31 @@ const AppContent: React.FC = () => {
   const lastProcessedTimestampsRef = useRef<{ [roomId: string]: number }>({});
   const userSentMessagesRef = useRef<Set<string>>(new Set());
   
-  // --- PERBAIKAN UTAMA: SESSION TRACKER UNTUK USER COUNT (MENCEGAH PENAMBAHAN GANDA) ---
-  const sessionJoinedRooms = useRef<Set<string>>(new Set());
+  // --- DIHAPUS: sessionJoinedRooms tidak lagi diperlukan ---
+  // const sessionJoinedRooms = useRef<Set<string>>(new Set());
   // --------------------------------------------------------------------------------------
 
   // --- FUNCTION DEFINITIONS (useCallback) ---
   
+  // --- PERUBAHAN: leaveCurrentRoom sekarang menghapus presence ---
   const leaveCurrentRoom = useCallback(() => {
     if (!currentRoom?.id) return;
     
     const currentTime = Date.now();
     const roomId = currentRoom.id;
     
-    // CATATAN: Fungsi ini HANYA menangani navigasi antar-halaman.
-    // Penghitung userCount TIDAK DI DECREMENT di sini.
+    // --- DITAMBAHKAN: Hapus presence dari room saat navigasi ---
+    if (!DEFAULT_ROOM_IDS.includes(roomId) && database && firebaseUser?.uid) {
+        try {
+            const roomPresenceRef = safeRef(`room_presence/${roomId}/${firebaseUser.uid}`);
+            remove(roomPresenceRef).then(() => {
+                console.log(`[Presence] User ${firebaseUser.uid} left room ${roomId} (navigating away)`);
+            });
+        } catch (e) {
+            console.error("[Presence] Error removing room presence on leave:", e);
+        }
+    }
+    // --- AKHIR PERUBAHAN ---
     
     setUserLastVisit(prev => ({
       ...prev,
@@ -225,6 +236,7 @@ const AppContent: React.FC = () => {
 
     console.log(`Left room: ${roomId}, reset unread count, updated last visit, removed typing status.`);
   }, [currentRoom, database, firebaseUser]);
+  // --- AKHIR PERUBAHAN ---
 
   const handleAndroidLoginToken = useCallback(async (idToken: string) => {
     console.log("handleAndroidLoginToken dipanggil dengan token.");
@@ -273,26 +285,11 @@ const AppContent: React.FC = () => {
     }
   }, [users, currentUser]);
 
-  const updateRoomUserCount = useCallback(async (roomId: string, increment: boolean) => {
-    if (!database) return;
-    if (DEFAULT_ROOM_IDS.includes(roomId)) return;
-
-    try {
-      const roomRef = safeRef(`rooms/${roomId}/userCount`);
-      const snapshot = await get(roomRef);
-      const currentCount = snapshot.val() || 0;
-      const newCount = increment ? currentCount + 1 : Math.max(0, currentCount - 1);
-      
-      await set(roomRef, newCount);
-      
-      setRoomUserCounts(prev => ({
-        ...prev,
-        [roomId]: newCount
-      }));
-    } catch (error) {
-      console.error('Error updating room user count:', error);
-    }
-  }, [database]);
+  // --- DIHAPUS: Fungsi ini tidak lagi digunakan, digantikan oleh listener presence ---
+  // const updateRoomUserCount = useCallback(async (roomId: string, increment: boolean) => {
+  //   ...
+  // }, [database]);
+  // --- AKHIR PENGHAPUSAN ---
 
   // --- PERBAIKAN LOGIKA TOGGLE NOTIFIKASI (MENGATUR FCM SUBSCRIBE/UNSUBSCRIBE) ---
   const handleToggleNotification = useCallback((roomId: string, enabled: boolean) => {
@@ -540,6 +537,7 @@ const AppContent: React.FC = () => {
     };
   }, [handleAndroidLoginToken, handleAndroidBackButton]);
 
+  // --- PERUBAHAN: handleJoinRoom tidak lagi menghitung manual ---
   const handleJoinRoom = useCallback((room: Room) => {
     setCurrentRoom(room);
     updateNativeRoomState(room.id); // <-- Mengatur ID room ke room yang aktif di native
@@ -561,16 +559,27 @@ const AppContent: React.FC = () => {
     setPageHistory(prev => [...prev, 'forum']); // Navigasi ke 'forum'
     
     if (!room.isDefaultRoom) {
-      // --- LOGIKA PERBAIKAN USER COUNT INCREMENT ---
-      // Hanya increment jika room belum di-join di SESI INI.
-      if (!sessionJoinedRooms.current.has(room.id)) {
-          updateRoomUserCount(room.id, true); 
-          console.log(`[handleJoinRoom] Incremented user count for room: ${room.id}`);
-          sessionJoinedRooms.current.add(room.id); // Tandai sudah dihitung di sesi ini
-      } else {
-          console.log(`[handleJoinRoom] User already accounted for in this session: ${room.id}`);
+      // --- LOGIKA PERBAIKAN USER COUNT (Mulai) ---
+      // Hapus logika increment manual
+      // if (!sessionJoinedRooms.current.has(room.id)) {
+      //     updateRoomUserCount(room.id, true); 
+      //     ...
+      // }
+      
+      // Tambahkan user ke presence room
+      if (database && firebaseUser?.uid) {
+          try {
+              const roomPresenceRef = safeRef(`room_presence/${room.id}/${firebaseUser.uid}`);
+              set(roomPresenceRef, true).then(() => {
+                  console.log(`[Presence] User ${firebaseUser.uid} set presence in room ${room.id}`);
+              });
+              // Hapus presence ini saat koneksi terputus
+              onDisconnect(roomPresenceRef).remove();
+          } catch(e) {
+              console.error("[Presence] Error setting room presence on join:", e);
+          }
       }
-      // ---------------------------------------------
+      // --- LOGIKA PERBAIKAN USER COUNT (Selesai) ---
 
       if (isFirstTimeJoin) {
         setHasJoinedRoom(prev => ({
@@ -598,13 +607,14 @@ const AppContent: React.FC = () => {
         console.log(`[JOIN] onDisconnect set for typing status in room ${room.id} on join`);
        } catch(e) { console.error("[JOIN] Error setting onDisconnect on join:", e); }
      }
-  }, [updateRoomUserCount, hasJoinedRoom, database, firebaseUser, notificationSettings]);
+  }, [hasJoinedRoom, database, firebaseUser, notificationSettings]); // updateRoomUserCount dihapus
   
   const handleLeaveRoom = useCallback(() => { 
     // Cukup panggil handleAndroidBackButton() untuk kembali
     handleAndroidBackButton();
   }, [handleAndroidBackButton]);
   
+  // --- PERUBAHAN: handleLeaveJoinedRoom tidak lagi menghitung manual ---
   const handleLeaveJoinedRoom = useCallback((roomId: string) => {
     if (DEFAULT_ROOM_IDS.includes(roomId)) return;
     
@@ -614,19 +624,31 @@ const AppContent: React.FC = () => {
       console.log(`[Bridge] Unsubscribed from topic: ${roomId} on permanent leave.`);
     }
     
-    // --- LOGIKA PERBAIKAN USER COUNT DECREMENT (SAMA DENGAN SEBELUMNYA, DIVERIFIKASI SUDAH BENAR) ---
+    // --- LOGIKA PERBAIKAN USER COUNT (Mulai) ---
+    // Hapus manual decrement
+    // if (hasJoinedRoom[roomId]) {
+    //   updateRoomUserCount(roomId, false); // <-- DIHAPUS
+    //   ...
+    // }
     if (hasJoinedRoom[roomId]) {
-      updateRoomUserCount(roomId, false); // <-- User count di-decrement
-      console.log(`[handleLeaveJoinedRoom] Decremented user count for room: ${roomId}`);
-      setHasJoinedRoom(prev => ({
-        ...prev,
-        [roomId]: false
-      }));
+        setHasJoinedRoom(prev => ({
+            ...prev,
+            [roomId]: false
+        }));
     }
-    // --------------------------------------------------------------------------------------------------
     
-    // --- PERBAIKAN: HAPUS FLAG SESI AGAR BISA INCREMENT LAGI JIKA RE-JOIN PERMANEN ---
-    sessionJoinedRooms.current.delete(roomId); // <-- Hapus flag sesi
+    // Hapus user dari presence room
+    if (database && firebaseUser?.uid) {
+       try {
+        const roomPresenceRef = safeRef(`room_presence/${roomId}/${firebaseUser.uid}`);
+        remove(roomPresenceRef).then(() => {
+            console.log(`[Presence] User ${firebaseUser.uid} PERMANENTLY left room ${roomId}`);
+        });
+       } catch(e) { console.error("[Presence] Error removing room presence on permanent leave:", e); }
+    }
+    // --- LOGIKA PERBAIKAN USER COUNT (Selesai) ---
+    
+    // --- DIHAPUS: sessionJoinedRooms.current.delete(roomId); ---
     
     if (currentRoom?.id === roomId) { 
       // Jika room aktif yang ditinggalkan, clear native state melalui leaveCurrentRoom
@@ -651,7 +673,7 @@ const AppContent: React.FC = () => {
        } catch(e) { console.error("Error removing typing status on leave joined (outer):", e); }
      }
     
-  }, [currentRoom, leaveCurrentRoom, updateRoomUserCount, hasJoinedRoom, database, firebaseUser]);
+  }, [currentRoom, leaveCurrentRoom, hasJoinedRoom, database, firebaseUser]); // updateRoomUserCount dihapus
 
   const handleCreateRoom = useCallback((roomName: string) => {
     if (!currentUser?.username || !firebaseUser) { 
@@ -685,7 +707,7 @@ const AppContent: React.FC = () => {
     
     const roomData = {
       name: trimmedName,
-      userCount: 1,
+      userCount: 0, // --- PERUBAHAN: Mulai dari 0. Presence akan mengupdatenya ---
       createdBy: currentUser.username, 
       createdAt: Date.now(),
       isDefaultRoom: false
@@ -708,6 +730,9 @@ const AppContent: React.FC = () => {
           ...prev,
           [roomId]: true
         }));
+        // --- PERUBAHAN: userCount akan dihandle oleh presence saat join ---
+        // Kita set userCount jadi 1 di sini untuk tampilan sementara
+        setRoomUserCounts(prev => ({...prev, [roomId]: 1}));
         handleJoinRoom(newRoom);
       })
       .catch((error) => {
@@ -730,7 +755,7 @@ const AppContent: React.FC = () => {
     }
   }, [handleJoinRoom, rooms, currentUser, database, firebaseUser]);
 
-  // --- PERUBAHAN DI SINI: Menghapus window.confirm ---
+  // --- PERUBAHAN: Menghapus window.confirm ---
   const handleDeleteRoom = useCallback((roomId: string) => {
     if (!currentUser?.username || !firebaseUser?.uid) {
       console.warn('Delete room prerequisites failed (user).');
@@ -773,7 +798,13 @@ const AppContent: React.FC = () => {
             return remove(messagesRef);
           })
           .then(() => {
-            console.log(`Messages for room ${roomId} deleted.`);
+            // --- DITAMBAHKAN: Hapus juga data presence room ---
+            const presenceRef = safeRef(`room_presence/${roomId}`);
+            return remove(presenceRef);
+            // --- AKHIR TAMBAHAN ---
+          })
+          .then(() => {
+            console.log(`Messages and presence for room ${roomId} deleted.`);
             setHasJoinedRoom(prev => {
               const newState = { ...prev };
               delete newState[roomId];
@@ -784,8 +815,7 @@ const AppContent: React.FC = () => {
               setPageHistory(prev => prev.slice(0, -1)); // Kembali
             }
             
-            // Hapus flag sesi saat room dihapus
-            sessionJoinedRooms.current.delete(roomId);
+            // --- DIHAPUS: sessionJoinedRooms.current.delete(roomId); ---
           })
           .catch(error => {
             console.error(`Gagal menghapus room ${roomId}:`, error);
@@ -1015,6 +1045,18 @@ const AppContent: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
       if (user) {
+        // --- DITAMBAHKAN: Set global presence saat user login ---
+        try {
+            const presenceRef = safeRef(`presence/${user.uid}`);
+            set(presenceRef, true);
+            // Hapus presence ini saat user disconnect (tutup app, dll)
+            onDisconnect(presenceRef).remove();
+            console.log(`[Presence] Global presence set for ${user.uid}`);
+        } catch (e) {
+            console.error("[Presence] Error setting global presence:", e);
+        }
+        // --- AKHIR TAMBAHAN ---
+
         const appUser = Object.values(users).find(u => u.email === user.email);
         if (appUser) {
           if (!currentUser || currentUser.email !== appUser.email) {
@@ -1096,10 +1138,24 @@ const AppContent: React.FC = () => {
           if (roomData && typeof roomData === 'object') {
             const userCount = roomData.userCount || 0;
             roomsArray.push({ id: key, name: roomData.name, userCount: userCount, createdBy: roomData.createdBy, isDefaultRoom: roomData.isDefaultRoom || false });
-            userCounts[key] = userCount;
+            // --- PERUBAHAN: Jangan set userCounts dari sini, biarkan listener presence yang mengatur ---
+            // userCounts[key] = userCount; // <-- DIHAPUS
           }
         });
-        setRoomUserCounts(userCounts);
+        // --- PERUBAHAN: Set userCounts dari state roomUserCounts ---
+        setRoomUserCounts(prevCounts => {
+            const newCounts = {...prevCounts};
+            Object.keys(data).forEach(key => {
+                if(data[key] && typeof data[key] === 'object') {
+                     // Hanya update jika belum di-set oleh presence listener
+                    if(newCounts[key] === undefined) {
+                        newCounts[key] = data[key].userCount || 0;
+                    }
+                }
+            });
+            return newCounts;
+        });
+        // --- AKHIR PERUBAHAN ---
         const defaultRooms = [ { id: 'berita-kripto', name: 'Berita Kripto', userCount: 0, isDefaultRoom: true }, { id: 'pengumuman-aturan', name: 'Pengumuman & Aturan', userCount: 0, isDefaultRoom: true } ];
         const combinedRooms = [...defaultRooms, ...roomsArray.filter(r => !DEFAULT_ROOM_IDS.includes(r.id))];
         setRooms(combinedRooms);
@@ -1107,6 +1163,58 @@ const AppContent: React.FC = () => {
     }, (error) => { console.error('Firebase rooms listener error:', error); });
     return () => { if (database) off(roomsRef, 'value', listener); };
   }, [database]);
+
+
+  // --- DITAMBAHKAN: Efek baru untuk listener presence ---
+  useEffect(() => {
+      if (!database) {
+          console.warn('Presence listener skipped: DB not initialized.');
+          return;
+      }
+
+      const presenceListeners: { [roomId: string]: () => void } = {};
+      
+      // Kita hanya perlu memantau room yang kita join
+      joinedRoomIds.forEach(roomId => {
+          if (DEFAULT_ROOM_IDS.includes(roomId)) return;
+
+          const roomPresenceRef = safeRef(`room_presence/${roomId}`);
+          
+          const listener = onValue(roomPresenceRef, (snapshot) => {
+              let userCount = 0;
+              if (snapshot.exists()) {
+                  userCount = snapshot.numChildren();
+              }
+              
+              console.log(`[Presence Listen] Room ${roomId} count is now ${userCount}`);
+              
+              // 1. Update state React untuk tampilan UI
+              setRoomUserCounts(prev => ({
+                  ...prev,
+                  [roomId]: userCount
+              }));
+
+              // 2. Update data count di Firebase
+              // Ini akan memicu listener 'rooms' di atas dan menyinkronkan semua klien
+              const roomRef = safeRef(`rooms/${roomId}`);
+              update(roomRef, { userCount: userCount }).catch(err => {
+                  console.error(`[Presence Listen] Gagal update count untuk room ${roomId}:`, err);
+              });
+          
+          }, (error) => {
+              console.error(`[Presence Listen] Error listening to room ${roomId}:`, error);
+          });
+          
+          presenceListeners[roomId] = () => off(roomPresenceRef, 'value', listener);
+      });
+
+      // Cleanup listeners saat komponen unmount atau joinedRoomIds berubah
+      return () => {
+          Object.values(presenceListeners).forEach(unsubscribe => unsubscribe());
+      };
+  }, [database, joinedRoomIds]);
+  // --- AKHIR TAMBAHAN EFEK ---
+
 
   useEffect(() => {
     if (!database) { console.warn('Messages listener skipped: DB not initialized.'); if (currentRoom?.id) setFirebaseMessages(prev => ({ ...prev, [currentRoom.id]: [] })); return; }
@@ -1267,7 +1375,8 @@ const AppContent: React.FC = () => {
   }, [totalUnreadCount]);
 
   const updatedRooms = useMemo(() => {
-    return rooms.map(room => ({ ...room, userCount: roomUserCounts[room.id] || room.userCount || 0 }));
+    // --- PERUBAHAN: Pastikan room.userCount mengambil dari roomUserCounts ---
+    return rooms.map(room => ({ ...room, userCount: roomUserCounts[room.id] || 0 }));
   }, [rooms, roomUserCounts]);
   const totalUsers = useMemo(() => updatedRooms.reduce((sum, r) => sum + (r.userCount || 0), 0), [updatedRooms]);
   const heroCoin = useMemo(() => searchedCoin || trendingCoins[0] || null, [searchedCoin, trendingCoins]);

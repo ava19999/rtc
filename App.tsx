@@ -440,25 +440,22 @@ const AppContent: React.FC = () => {
 
   }, [users, pendingGoogleUser, firebaseUser]);
 
+  // --- PERBAIKAN FUNGSI LOGOUT ---
   const handleLogout = useCallback(() => {
     leaveCurrentRoom();
     updateNativeRoomState(null); // <-- Mengatur ID room menjadi null saat logout
-    
-    // RESET USER ID DI NATIVE SAAT LOGOUT
-    updateNativeUserState(null);
+    updateNativeUserState(null); // <-- RESET USER ID DI NATIVE SAAT LOGOUT
 
     const auth = getAuth();
-    signOut(auth)
-      .then(() => {
-        setPageHistory(['home']); // <-- RESET HISTORY
-      })
-      .catch((error) => {
+    signOut(auth).catch((error) => {
+        // Hanya log error. onAuthStateChanged akan menangani state UI.
         console.error('Firebase signOut error:', error);
-        setCurrentUser(null);
-        setFirebaseUser(null);
-        setPageHistory(['home']); // <-- RESET HISTORY
       });
+    
+    // HAPUS SEMUA setPageHistory, setCurrentUser, setFirebaseUser.
+    // Biarkan onAuthStateChanged (baris 538) yang menanganinya.
   }, [leaveCurrentRoom]);
+  // --- AKHIR PERBAIKAN ---
 
   const handleIncrementAnalysisCount = useCallback((coinId: string) => {
     setAnalysisCounts(prev => {

@@ -49,13 +49,15 @@ import {
 } from './services/mockData';
 import { ADMIN_USERNAMES } from './components/UserTag';
 import { database, getDatabaseInstance, testDatabaseConnection } from './services/firebaseService';
-// --- PERUBAHAN: Impor fungsi query ---
 import { 
   ref, set, push, onValue, off, update, get, Database, remove, onDisconnect,
-  query, orderByChild, equalTo
+  query, orderByChild, equalTo // Pastikan query diimpor
 } from 'firebase/database';
 
-const DEFAULT_ROOM_IDS = ['berita-kripto', 'pengumuman-aturan'];
+// --- PERUBAHAN DI SINI ---
+const DEFAULT_ROOM_IDS = ['berita-kripto', 'pengumuman-aturan', 'tanya-atmin'];
+// --- AKHIR PERUBAHAN ---
+
 const TYPING_TIMEOUT = 5000; // 5 detik
 
 // Helper function untuk safely menggunakan database
@@ -140,9 +142,6 @@ const AppContent: React.FC = () => {
   const [idrRate, setIdrRate] = useState<number | null>(null);
   const [isRateLoading, setIsRateLoading] = useState(true);
   
-  // --- PERUBAHAN: State 'users' dihapus ---
-  // const [users, setUsers] = useState<{ [email: string]: User }>({}); 
-  
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [pendingGoogleUser, setPendingGoogleUser] = useState<GoogleProfile | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -158,10 +157,13 @@ const AppContent: React.FC = () => {
   const [trendingError, setTrendingError] = useState<string | null>(null);
   const [searchedCoin, setSearchedCoin] = useState<CryptoData | null>(null);
   
+  // --- PERUBAHAN DI SINI ---
   const [rooms, setRooms] = useState<Room[]>([
     { id: 'berita-kripto', name: 'Berita Kripto', userCount: 0, isDefaultRoom: true },
-    { id: 'pengumuman-aturan', name: 'Pengumuman & Aturan', userCount: 0, isDefaultRoom: true }
+    { id: 'pengumuman-aturan', name: 'Pengumuman & Aturan', userCount: 0, isDefaultRoom: true },
+    { id: 'tanya-atmin', name: 'Tanya #atmin', userCount: 0, isDefaultRoom: true }
   ]);
+  // --- AKHIR PERUBAHAN ---
   
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [joinedRoomIds, setJoinedRoomIds] = useState<Set<string>>(() => {
@@ -226,7 +228,6 @@ const AppContent: React.FC = () => {
     console.log(`Left room: ${roomId}, reset unread count, updated last visit, removed typing status.`);
   }, [currentRoom, database, firebaseUser]);
 
-  // --- PERUBAHAN: handleAndroidLoginToken disederhanakan ---
   const handleAndroidLoginToken = useCallback(async (idToken: string) => {
     console.log("handleAndroidLoginToken dipanggil dengan token.");
     setAuthError(null);
@@ -238,7 +239,6 @@ const AppContent: React.FC = () => {
       const auth = getAuth();
       const googleCredential = GoogleAuthProvider.credential(idToken);
       
-      // Cukup sign-in. onAuthStateChanged akan menangani sisanya.
       await signInWithCredential(auth, googleCredential);
       console.log("Android sign-in credential submitted. Waiting for onAuthStateChanged...");
 
@@ -249,7 +249,7 @@ const AppContent: React.FC = () => {
       setAuthError(errMsg);
       if (currentUser) setCurrentUser(null);
     }
-  }, [currentUser]); // currentUser sbg dependency untuk `if (currentUser) setCurrentUser(null);`
+  }, [currentUser]);
 
   const updateRoomUserCount = useCallback(async (roomId: string, increment: boolean) => {
     if (!database) return;
@@ -340,7 +340,6 @@ const AppContent: React.FC = () => {
     }
   }, [currentRoom]);
 
-  // --- PERUBAHAN: handleGoogleRegisterSuccess disederhanakan ---
   const handleGoogleRegisterSuccess = useCallback(async (credentialResponse: CredentialResponse) => {
     setAuthError(null);
     if (!credentialResponse.credential) { 
@@ -351,7 +350,6 @@ const AppContent: React.FC = () => {
       const auth = getAuth();
       const googleCredential = GoogleAuthProvider.credential(credentialResponse.credential);
       
-      // Cukup sign-in. onAuthStateChanged akan menangani sisanya.
       await signInWithCredential(auth, googleCredential);
       console.log("Google sign-in credential submitted. Waiting for onAuthStateChanged...");
 
@@ -366,9 +364,8 @@ const AppContent: React.FC = () => {
       setAuthError(errMsg);
       if (currentUser) setCurrentUser(null);
     }
-  }, [currentUser]); // 'users' dihapus dari dependencies
+  }, [currentUser]);
 
-  // --- PERUBAHAN: handleProfileComplete diubah untuk cek & simpan ke RTDB ---
   const handleProfileComplete = useCallback(async (username: string, password: string): Promise<string | void> => {
     setAuthError(null);
     if (!pendingGoogleUser) { setAuthError('Data Google tidak ditemukan.'); return 'Data Google tidak ditemukan.'; }
@@ -377,8 +374,7 @@ const AppContent: React.FC = () => {
 
     const trimmedUsername = username.trim();
     
-    // 1. Cek keunikan username di database (server-side)
-    // Kita buat "indeks" username untuk pengecekan cepat
+    // Cek keunikan username di database
     const usernameRef = safeRef(`usernames/${trimmedUsername.toLowerCase()}`);
     const usernameSnapshot = await get(usernameRef);
 
@@ -388,7 +384,6 @@ const AppContent: React.FC = () => {
       return errorMsg;
     }
 
-    // 2. Buat objek User (tanpa password)
     const newUser: User = {
       email: pendingGoogleUser.email,
       username: trimmedUsername,
@@ -396,22 +391,16 @@ const AppContent: React.FC = () => {
       createdAt: Date.now()
     };
 
-    // 3. Simpan user baru ke database menggunakan UID
     const userRef = safeRef(`users/${firebaseUser.uid}`);
     
     try {
-      // Tulis data user
       await set(userRef, newUser);
-      
-      // Tulis data indeks username
-      await set(usernameRef, firebaseUser.uid);
+      await set(usernameRef, firebaseUser.uid); // Simpan indeks username
 
-      // 4. Set state aplikasi
       setCurrentUser(newUser);
       setPendingGoogleUser(null);
-      setPageHistory(['home']); // <-- RESET HISTORY
+      setPageHistory(['home']); 
 
-      // KIRIM USERNAME KE NATIVE UNTUK SUPRESI NOTIFIKASI
       updateNativeUserState(trimmedUsername);
 
     } catch (dbError) {
@@ -421,25 +410,23 @@ const AppContent: React.FC = () => {
       return errorMsg;
     }
 
-  }, [pendingGoogleUser, firebaseUser, database]); // 'users' dihapus
+  }, [pendingGoogleUser, firebaseUser, database]);
 
   const handleLogout = useCallback(() => {
     leaveCurrentRoom();
-    updateNativeRoomState(null); // <-- Mengatur ID room menjadi null saat logout
-    
-    // RESET USER ID DI NATIVE SAAT LOGOUT
+    updateNativeRoomState(null); 
     updateNativeUserState(null);
 
     const auth = getAuth();
     signOut(auth)
       .then(() => {
-        setPageHistory(['home']); // <-- RESET HISTORY
+        setPageHistory(['home']); 
       })
       .catch((error) => {
         console.error('Firebase signOut error:', error);
         setCurrentUser(null);
         setFirebaseUser(null);
-        setPageHistory(['home']); // <-- RESET HISTORY
+        setPageHistory(['home']);
       });
   }, [leaveCurrentRoom]);
 
@@ -461,19 +448,17 @@ const AppContent: React.FC = () => {
     
     if (page === 'home') {
       if (currentPage === 'home') {
-        handleResetToTrending(); // Reset coin search jika sudah di home
+        handleResetToTrending(); 
       } else {
-        setPageHistory(prev => [...prev, 'home']); // Navigasi ke home
+        setPageHistory(prev => [...prev, 'home']);
       }
     } else if (page === 'forum') {
       if (currentPage === 'forum' && currentRoom) {
          // Sudah di forum, jangan lakukan apa-apa
       } else {
-        // Arahkan ke daftar room
         setPageHistory(prev => [...prev, 'rooms']);
       }
     } else if (page !== currentPage) {
-      // Untuk 'about', dll.
       setPageHistory(prev => [...prev, page]);
     }
   }, [pageHistory, currentRoom, leaveCurrentRoom, handleResetToTrending]);
@@ -502,7 +487,7 @@ const AppContent: React.FC = () => {
       }
       
       console.log("[Back Button] Popping page history.");
-      setPageHistory(prev => prev.slice(0, -1)); // Kembali ke halaman sebelumnya
+      setPageHistory(prev => prev.slice(0, -1)); 
       return true; // DITANGANI
     }
 
@@ -618,7 +603,6 @@ const AppContent: React.FC = () => {
     
   }, [currentRoom, leaveCurrentRoom, updateRoomUserCount, hasJoinedRoom, database, firebaseUser]);
 
-  // --- PERUBAHAN: handleCreateRoom ditambahkan createdById ---
   const handleCreateRoom = useCallback((roomName: string) => {
     if (!currentUser?.username || !firebaseUser) { 
       alert('Anda harus login untuk membuat room.'); 
@@ -651,9 +635,9 @@ const AppContent: React.FC = () => {
     
     const roomData = {
       name: trimmedName,
-      userCount: 0, // <-- Diubah ke 0 (akan di-update oleh handleJoinRoom)
+      userCount: 0, // Diubah ke 0, akan di-handle oleh handleJoinRoom
       createdBy: currentUser.username, 
-      createdById: firebaseUser.uid, // <-- DITAMBAHKAN
+      createdById: firebaseUser.uid, // Ditambahkan untuk cek kepemilikan
       createdAt: Date.now(),
       isDefaultRoom: false
     };
@@ -694,7 +678,6 @@ const AppContent: React.FC = () => {
     }
   }, [handleJoinRoom, rooms, currentUser, database, firebaseUser]);
 
-  // --- PERUBAHAN: handleDeleteRoom menggunakan createdById ---
   const handleDeleteRoom = useCallback((roomId: string) => {
     if (!currentUser?.username || !firebaseUser?.uid) {
       console.warn('Delete room prerequisites failed (user).');
@@ -714,17 +697,13 @@ const AppContent: React.FC = () => {
 
     try {
       const isAdmin = ADMIN_USERNAMES.map(name => name.toLowerCase()).includes(currentUser.username.toLowerCase());
-      // Cek kepemilikan menggunakan UID
-      const isCreator = roomToDelete.createdById === firebaseUser.uid; // <-- PERBAIKAN CEK KEPEMILIKAN
+      const isCreator = roomToDelete.createdById === firebaseUser.uid; // Cek kepemilikan via UID
 
       if (!isAdmin && !isCreator) {
         alert('Hanya admin atau pembuat room yang dapat menghapus room ini.');
         return;
       }
-
-      // Hapus konfirmasi `window.confirm`
         
-        // Unsubscribe dari topik sebelum dihapus
         if (typeof (window as any).AndroidBridge?.unsubscribeFromRoom === 'function') {
           (window as any).AndroidBridge.unsubscribeFromRoom(roomId);
         }
@@ -758,7 +737,6 @@ const AppContent: React.FC = () => {
       alert('Terjadi kesalahan saat menghapus room.');
     }
   }, [currentUser, rooms, firebaseUser, currentRoom, leaveCurrentRoom]); 
-  // --- AKHIR PERUBAHAN ---
 
   const handleSendMessage = useCallback((message: Partial<ChatMessage>) => {
     if (!database || !currentRoom?.id || !firebaseUser?.uid || !currentUser?.username) {
@@ -793,10 +771,8 @@ const AppContent: React.FC = () => {
       
       userSentMessagesRef.current.add(newMessageRef.key!);
       
-      // 1. Kirim pesan ke Database
       set(newMessageRef, messageToSend)
         .then(() => {
-          // 2. JIKA SUKSES, panggil Vercel API untuk kirim notifikasi
           if (messageText) {
             fetch('/api/sendNotification', {
               method: 'POST',
@@ -925,14 +901,7 @@ const AppContent: React.FC = () => {
 
   // --- EFEK (useEffect) ---
   
-  // Efek untuk me-load data dari local storage (dijalankan sekali)
   useEffect(() => { 
-    // --- PERUBAHAN: 'cryptoUsers' tidak lagi di-load ---
-    // try {
-    //   const u = localStorage.getItem('cryptoUsers');
-    //   if (u) setUsers(JSON.parse(u));
-    // } catch (e) { console.error('Gagal load users', e); }
-    
     const savedSettings = localStorage.getItem('roomNotificationSettings');
     if (savedSettings) {
       try { setNotificationSettings(JSON.parse(savedSettings)); } catch (e) { console.error('Gagal load pengaturan notifikasi', e); }
@@ -956,19 +925,14 @@ const AppContent: React.FC = () => {
     }
   }, []);
   
-  // Efek untuk menyimpan data ke local storage (dijalankan saat data berubah)
   useEffect(() => { localStorage.setItem('roomNotificationSettings', JSON.stringify(notificationSettings)); }, [notificationSettings]);
-  
-  // --- PERUBAHAN: 'cryptoUsers' tidak lagi di-simpan ---
-  // useEffect(() => { try { localStorage.setItem('cryptoUsers', JSON.stringify(users)); } catch (e) { console.error('Gagal simpan users', e); } }, [users]);
-  
   useEffect(() => { try { if (currentUser) localStorage.setItem('currentUser', JSON.stringify(currentUser)); else localStorage.removeItem('currentUser'); } catch (e) { console.error('Gagal simpan currentUser', e); } }, [currentUser]);
   useEffect(() => { try { localStorage.setItem('joinedRoomIds', JSON.stringify(Array.from(joinedRoomIds))); } catch (e) { console.error('Gagal simpan joined rooms', e); } }, [joinedRoomIds]);
   useEffect(() => { localStorage.setItem('unreadCounts', JSON.stringify(unreadCounts)); }, [unreadCounts]);
   useEffect(() => { localStorage.setItem('userLastVisit', JSON.stringify(userLastVisit)); }, [userLastVisit]);
   useEffect(() => { try { localStorage.setItem('hasJoinedRoom', JSON.stringify(hasJoinedRoom)); } catch (e) { console.error('Gagal simpan hasJoinedRoom', e); } }, [hasJoinedRoom]);
 
-  // --- PERUBAHAN: Efek untuk listener otentikasi Firebase (DIROMBAK) ---
+  // Efek untuk listener otentikasi Firebase (Logika RTDB)
   useEffect(() => {
     if (!database) {
       console.warn('Firebase Auth listener skipped: Database not initialized.');
@@ -998,7 +962,6 @@ const AppContent: React.FC = () => {
             setCurrentUser(appUser);
             setPendingGoogleUser(null);
             
-            // UPDATE NATIVE USER STATE
             updateNativeUserState(appUser.username);
   
             if (database && currentRoom?.id) {
@@ -1011,7 +974,6 @@ const AppContent: React.FC = () => {
           } else {
             // --- PENGGUNA GOOGLE BARU (BELUM BUAT USERNAME) ---
             console.log(`[Auth] No user profile found in RTDB for ${user.uid}.`);
-            // Kita perlu info Google untuk halaman CreateIdPage
             if (user.email && user.displayName && user.photoURL) {
               setPendingGoogleUser({
                 email: user.email,
@@ -1019,17 +981,15 @@ const AppContent: React.FC = () => {
                 picture: user.photoURL
               });
             } else {
-              // Ini kasus aneh, user Firebase ada tapi data Google tidak ada
-              // dan tidak ada di DB kita. Sebaiknya logout.
               console.error("[Auth] Firebase user exists but has no profile data and no DB record.");
-              handleLogout(); // Panggil handleLogout untuk bersih-bersih
+              handleLogout(); 
             }
             setCurrentUser(null);
           }
         } catch (dbError) {
           console.error("[Auth] Error fetching user from RTDB:", dbError);
           setAuthError("Gagal mengambil profil user.");
-          handleLogout(); // Logout jika gagal baca DB
+          handleLogout(); 
         }
       } else {
         // --- PENGGUNA LOGOUT ---
@@ -1043,7 +1003,7 @@ const AppContent: React.FC = () => {
     });
     
     return () => unsubscribe();
-  }, [database, currentRoom]); // 'users', 'pendingGoogleUser', 'currentUser', 'handleLogout' dihapus dari deps
+  }, [database, currentRoom, handleLogout]); // handleLogout ditambahkan sebagai dependency
 
   // Efek untuk mengambil data (API calls, dll)
   useEffect(() => { fetchTrendingData(); }, [fetchTrendingData]);
@@ -1083,7 +1043,6 @@ const AppContent: React.FC = () => {
   }, [fetchAndStoreNews]);
 
   // Efek untuk listener database (Rooms, Messages, Typing)
-  // --- PERUBAHAN: Listener 'rooms' ditambahkan 'createdById' ---
   useEffect(() => {
     if (!database) { console.warn('Firebase rooms listener skipped: DB not initialized.'); return; }
     const roomsRef = safeRef('rooms');
@@ -1100,14 +1059,22 @@ const AppContent: React.FC = () => {
               name: roomData.name, 
               userCount: userCount, 
               createdBy: roomData.createdBy, 
-              createdById: roomData.createdById, // <-- DITAMBAHKAN
+              createdById: roomData.createdById, // Diambil dari DB
               isDefaultRoom: roomData.isDefaultRoom || false 
             });
             userCounts[key] = userCount;
           }
         });
         setRoomUserCounts(userCounts);
-        const defaultRooms = [ { id: 'berita-kripto', name: 'Berita Kripto', userCount: 0, isDefaultRoom: true }, { id: 'pengumuman-aturan', name: 'Pengumuman & Aturan', userCount: 0, isDefaultRoom: true } ];
+        
+        // --- PERUBAHAN DI SINI ---
+        const defaultRooms = [ 
+          { id: 'berita-kripto', name: 'Berita Kripto', userCount: 0, isDefaultRoom: true }, 
+          { id: 'pengumuman-aturan', name: 'Pengumuman & Aturan', userCount: 0, isDefaultRoom: true },
+          { id: 'tanya-atmin', name: 'Tanya #atmin', userCount: 0, isDefaultRoom: true }
+        ];
+        // --- AKHIR PERUBAHAN ---
+
         const combinedRooms = [...defaultRooms, ...roomsArray.filter(r => !DEFAULT_ROOM_IDS.includes(r.id))];
         setRooms(combinedRooms);
       }
@@ -1157,7 +1124,6 @@ const AppContent: React.FC = () => {
     return () => { if (database) off(messagesRef, 'value', listener); };
   }, [currentRoom, database]);
 
-  // --- LOGIKA UNREAD COUNT (MEMASTIKAN PESAN SENDIRI DAN DI ROOM AKTIF TIDAK DIHITUNG) ---
   useEffect(() => {
     if (!database) return;
     Object.values(roomListenersRef.current).forEach(unsubscribe => { if (typeof unsubscribe === 'function') { unsubscribe(); } });
@@ -1176,16 +1142,14 @@ const AppContent: React.FC = () => {
           if (!msgData) return;
           const timestamp = msgData.published_on ? msgData.published_on * 1000 : msgData.timestamp;
           const sender = msgData.sender; 
-          const isCurrentUser = sender === currentUser?.username; // <-- Cek pesan sendiri
+          const isCurrentUser = sender === currentUser?.username; 
 
-          // Hanya hitung jika: pesan baru, dan BUKAN dari user saat ini, dan room BUKAN room aktif
           if (timestamp > lastVisit && !isCurrentUser && roomId !== currentRoom?.id) { 
             newMessagesCount++; 
             hasNewMessageFromOthers = true; 
           }
         });
         
-        // Atur count: jika ada pesan baru dari orang lain DAN user tidak di room
         if (hasNewMessageFromOthers && roomId !== currentRoom?.id) { 
             setUnreadCounts(prev => ({ ...prev, [roomId]: newMessagesCount })); 
         } 
@@ -1234,7 +1198,6 @@ const AppContent: React.FC = () => {
     return () => { console.log("[Typing Effect] Cleaning up typing listeners."); Object.values(typingListenersRef.current).forEach(unsubscribe => unsubscribe()); typingListenersRef.current = {}; };
   }, [database, joinedRoomIds, firebaseUser?.uid, currentUser]);
   
-  // Efek untuk update last visit saat pindah room
   useEffect(() => {
     if (currentRoom?.id) {
       const currentTime = Date.now();
@@ -1351,6 +1314,7 @@ const AppContent: React.FC = () => {
         </>
       );
     } else if (currentUser && !currentUser.username) {
+      // Ini seharusnya tidak terjadi lagi dengan logika RTDB yang baru, tapi sebagai penjaga
       console.warn('User logged in but missing username, showing CreateIdPage again.');
       if (currentUser.googleProfilePicture && currentUser.email) {
         contentToRender = <CreateIdPage onProfileComplete={handleProfileComplete} googleProfile={{ email: currentUser.email, name: currentUser.email, picture: currentUser.googleProfilePicture }} />;
@@ -1360,10 +1324,7 @@ const AppContent: React.FC = () => {
         contentToRender = <LoginPage onGoogleRegisterSuccess={handleGoogleRegisterSuccess} />;
       }
     } else {
-      // --- PERUBAHAN: Ini adalah state normal saat onAuthStateChanged sedang memeriksa RTDB ---
-      // Jangan paksa logout, tunggu isAuthLoading menjadi false.
-      // Jika firebaseUser ada tapi currentUser masih null, dan pendingGoogleUser juga null,
-      // itu berarti onAuthStateChanged sedang mengambil data dari RTDB.
+      // Ini adalah state normal saat onAuthStateChanged sedang memeriksa RTDB
       console.log("[Render] Waiting for RTDB user profile lookup...");
       return <div className="min-h-screen bg-transparent text-white flex items-center justify-center">Mengambil profil Anda...</div>;
     }

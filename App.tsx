@@ -190,9 +190,9 @@ const AppContent: React.FC = () => {
   const lastProcessedTimestampsRef = useRef<{ [roomId: string]: number }>({});
   const userSentMessagesRef = useRef<Set<string>>(new Set());
   
-  // --- PERBAIKAN UTAMA: SESSION TRACKER UNTUK USER COUNT (MENCEGAH PENAMBAHAN GANDA) ---
-  const sessionJoinedRooms = useRef<Set<string>>(new Set());
-  // --------------------------------------------------------------------------------------
+  // --- DIHAPUS ---
+  // const sessionJoinedRooms = useRef<Set<string>>(new Set());
+  // ---------------
 
   // --- FUNCTION DEFINITIONS (useCallback) ---
   
@@ -560,25 +560,27 @@ const AppContent: React.FC = () => {
     setJoinedRoomIds(prev => new Set(prev).add(room.id));
     setPageHistory(prev => [...prev, 'forum']); // Navigasi ke 'forum'
     
+    // --- PERBAIKAN ---
     if (!room.isDefaultRoom) {
       // --- LOGIKA PERBAIKAN USER COUNT INCREMENT ---
-      // Hanya increment jika room belum di-join di SESI INI.
-      if (!sessionJoinedRooms.current.has(room.id)) {
+      // Kita cek 'isFirstTimeJoin' (yang diambil dari localStorage state 'hasJoinedRoom')
+      if (isFirstTimeJoin) {
+          // Hanya tambah hitungan JIKA ini pertama kalinya user join
           updateRoomUserCount(room.id, true); 
-          console.log(`[handleJoinRoom] Incremented user count for room: ${room.id}`);
-          sessionJoinedRooms.current.add(room.id); // Tandai sudah dihitung di sesi ini
+          console.log(`[handleJoinRoom] First time join. Incremented user count for room: ${room.id}`);
+          
+          // DAN set flag 'hasJoinedRoom' ke true agar tidak bertambah lagi
+          setHasJoinedRoom(prev => ({
+            ...prev,
+            [room.id]: true
+          }));
       } else {
-          console.log(`[handleJoinRoom] User already accounted for in this session: ${room.id}`);
+          // Jika user hanya kembali (isFirstTimeJoin = false), kita tidak melakukan apa-apa pada hitungan.
+          console.log(`[handleJoinRoom] User is already a member. Not incrementing count for room: ${room.id}`);
       }
       // ---------------------------------------------
-
-      if (isFirstTimeJoin) {
-        setHasJoinedRoom(prev => ({
-          ...prev,
-          [room.id]: true
-        }));
-      }
     }
+    // --- AKHIR PERBAIKAN ---
     
     setUnreadCounts(prev => ({
       ...prev,
@@ -625,8 +627,9 @@ const AppContent: React.FC = () => {
     }
     // --------------------------------------------------------------------------------------------------
     
-    // --- PERBAIKAN: HAPUS FLAG SESI AGAR BISA INCREMENT LAGI JIKA RE-JOIN PERMANEN ---
-    sessionJoinedRooms.current.delete(roomId); // <-- Hapus flag sesi
+    // --- DIHAPUS ---
+    // sessionJoinedRooms.current.delete(roomId); // <-- Hapus flag sesi
+    // ---------------
     
     if (currentRoom?.id === roomId) { 
       // Jika room aktif yang ditinggalkan, clear native state melalui leaveCurrentRoom
@@ -784,8 +787,9 @@ const AppContent: React.FC = () => {
               setPageHistory(prev => prev.slice(0, -1)); // Kembali
             }
             
-            // Hapus flag sesi saat room dihapus
-            sessionJoinedRooms.current.delete(roomId);
+            // --- DIHAPUS ---
+            // sessionJoinedRooms.current.delete(roomId);
+            // ---------------
           })
           .catch(error => {
             console.error(`Gagal menghapus room ${roomId}:`, error);

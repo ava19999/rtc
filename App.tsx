@@ -445,15 +445,14 @@ const AppContent: React.FC = () => {
     leaveCurrentRoom();
     updateNativeRoomState(null); // <-- Mengatur ID room menjadi null saat logout
     updateNativeUserState(null); // <-- RESET USER ID DI NATIVE SAAT LOGOUT
+    
+    setPageHistory(['home']); // <-- TAMBAHKAN INI
 
     const auth = getAuth();
     signOut(auth).catch((error) => {
         // Hanya log error. onAuthStateChanged akan menangani state UI.
         console.error('Firebase signOut error:', error);
       });
-    
-    // HAPUS SEMUA setPageHistory, setCurrentUser, setFirebaseUser.
-    // Biarkan onAuthStateChanged (baris 538) yang menanganinya.
   }, [leaveCurrentRoom]);
   // --- AKHIR PERBAIKAN ---
 
@@ -1039,15 +1038,20 @@ const AppContent: React.FC = () => {
           console.warn('Auth listener: Firebase user exists but no matching app user found and not pending.');
         }
       } else {
+        // --- PERBAIKAN DI SINI ---
         if (currentUser !== null) setCurrentUser(null);
         setPendingGoogleUser(null);
         updateNativeRoomState(null); // <-- Mengatur ID room menjadi null saat sesi berakhir
         updateNativeUserState(null); // <-- Mengatur user ID menjadi null saat sesi berakhir
+        setPageHistory(['home']); // <-- TAMBAHKAN INI
+        // --- AKHIR PERBAIKAN ---
       }
       setIsAuthLoading(false);
     });
     return () => unsubscribe();
-  }, [users, currentUser, pendingGoogleUser, database, currentRoom]);
+    // --- PERBAIKAN DI SINI: Hapus currentUser dari dependency array ---
+  }, [users, pendingGoogleUser, database, currentRoom]);
+  // --- AKHIR PERBAIKAN ---
 
   // Efek untuk mengambil data (API calls, dll)
   useEffect(() => { fetchTrendingData(); }, [fetchTrendingData]);

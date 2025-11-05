@@ -1,3 +1,4 @@
+// services/mockData.ts
 import { COINGECKO_API_BASE_URL, NEWS_API_URL, MAJOR_EXCHANGES } from '../constants';
 // Fix: Imported CACHE_DURATION to resolve reference errors.
 import { apiRequest, CACHE_DURATION } from './apiService';
@@ -23,17 +24,62 @@ export const fetchIdrRate = async (): Promise<number> => {
     return data?.tether?.idr || 16000; // Kurs fallback
 };
 
-export const fetchTrendingCoins = async (): Promise<CryptoData[]> => {
-    const trendingUrl = `${COINGECKO_API_BASE_URL}/search/trending`;
-    const trendingData = await apiRequest(trendingUrl, CACHE_DURATION.DEFAULT);
-    const trendingIds = trendingData.coins.map((c: any) => c.item.id).slice(0, 7).join(',');
+// --- PERUBAHAN DI SINI ---
 
-    if (!trendingIds) return [];
-
-    const coinsUrl = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&ids=${trendingIds}&order=market_cap_desc&per_page=10&page=1&sparkline=true&price_change_percentage=24h`;
-    const coinsData = await apiRequest(coinsUrl, CACHE_DURATION.DEFAULT);
+// FUNGSI BARU: Mengambil 3 koin hero statis
+export const fetchHeroCoins = async (): Promise<CryptoData[]> => {
+    const heroIds = 'bitcoin,ethereum,solana';
+    const url = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&ids=${heroIds}&order=market_cap_desc&per_page=3&page=1&sparkline=true&price_change_percentage=24h`;
+    const coinsData = await apiRequest(url, CACHE_DURATION.DEFAULT);
     return coinsData.map(mapCoinGeckoToCryptoData);
 };
+
+// FUNGSI LAMA DIHAPUS: fetchTrendingCoins (tidak dipakai lagi)
+// export const fetchTrendingCoins = async (): Promise<CryptoData[]> => { ... }
+
+// FUNGSI BARU: Mengambil 1000 koin teratas dengan data lengkap untuk disaring
+export const fetchMarketMoversData = async (): Promise<CryptoData[]> => {
+    const commonParams = "vs_currency=usd&order=market_cap_desc&per_page=250&sparkline=true&price_change_percentage=24h";
+    
+    const url1 = `${COINGECKO_API_BASE_URL}/coins/markets?${commonParams}&page=1`;
+    const url2 = `${COINGECKO_API_BASE_URL}/coins/markets?${commonParams}&page=2`;
+    const url3 = `${COINGECKO_API_BASE_URL}/coins/markets?${commonParams}&page=3`;
+    const url4 = `${COINGECKO_API_BASE_URL}/coins/markets?${commonParams}&page=4`;
+
+    // Ambil 4 halaman sekaligus (1000 koin)
+    const [coinsData1, coinsData2, coinsData3, coinsData4] = await Promise.all([
+        apiRequest(url1, CACHE_DURATION.LONG),
+        apiRequest(url2, CACHE_DURATION.LONG),
+        apiRequest(url3, CACHE_DURATION.LONG),
+        apiRequest(url4, CACHE_DURATION.LONG)
+    ]);
+    
+    const fullList = [...coinsData1, ...coinsData2, ...coinsData3, ...coinsData4];
+    
+    // Pastikan kita memetakan ke tipe CryptoData lengkap
+    return fullList.map(mapCoinGeckoToCryptoData);
+};
+
+// FUNGSI DIMODIFIKASI: fetchTop500Coins sekarang HANYA mengambil data ringan untuk pencarian
+export const fetchTop500CoinsList = async (): Promise<CoinListItem[]> => {
+    const url1 = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=false`;
+    const url2 = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=2&sparkline=false`;
+
+    const [coinsData1, coinsData2] = await Promise.all([
+        apiRequest(url1, CACHE_DURATION.LONG),
+        apiRequest(url2, CACHE_DURATION.LONG)
+    ]);
+    
+    const fullList = [...coinsData1, ...coinsData2];
+    // Hanya mengembalikan data ringan untuk pencarian
+    return fullList.map((coin: any) => ({
+        id: coin.id,
+        symbol: coin.symbol.toUpperCase(),
+        name: coin.name,
+        image: coin.image,
+    }));
+};
+// --- AKHIR PERUBAHAN ---
 
 export const fetchMarketDominance = async (): Promise<MarketDominance> => {
     const url = `${COINGECKO_API_BASE_URL}/global`;
@@ -44,26 +90,8 @@ export const fetchMarketDominance = async (): Promise<MarketDominance> => {
     return { btc, usdt, alts };
 };
 
-export const fetchTop500Coins = async (): Promise<CoinListItem[]> => {
-    const url1 = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=false`;
-    const url2 = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=2&sparkline=false`;
-
-    const [coinsData1, coinsData2] = await Promise.all([
-        apiRequest(url1, CACHE_DURATION.LONG),
-        apiRequest(url2, CACHE_DURATION.LONG)
-    ]);
-    
-    const fullList = [...coinsData1, ...coinsData2];
-    return fullList.map((coin: any) => ({
-        id: coin.id,
-        symbol: coin.symbol.toUpperCase(),
-        name: coin.name,
-        image: coin.image,
-    }));
-};
-
 export const fetchCoinDetails = async (coinId: string): Promise<CryptoData> => {
-    const url = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&ids=${coinId}&sparkline=true`;
+    const url = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&ids=${coinId}&sparkline=true&price_change_percentage=24h`;
     const coinsData = await apiRequest(url, CACHE_DURATION.DEFAULT);
     if (!coinsData || coinsData.length === 0) throw new Error("Koin tidak ditemukan");
     return mapCoinGeckoToCryptoData(coinsData[0]);

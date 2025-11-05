@@ -43,8 +43,9 @@ import { isNewsArticle, isChatMessage } from './types';
 import {
   fetchIdrRate,
   fetchNewsArticles,
-  fetchTop500Coins,
-  fetchTrendingCoins,
+  fetchTop500CoinsList, // --- PERUBAHAN DI SINI --- (diganti nama)
+  fetchMarketMoversData, // --- PERUBAHAN DI SINI --- (baru)
+  fetchHeroCoins, // --- PERUBAHAN DI SINI --- (baru)
   fetchCoinDetails
 } from './services/mockData';
 import { ADMIN_USERNAMES } from './components/UserTag';
@@ -134,6 +135,11 @@ const updateNativeSoundState = (enabled: boolean) => {
   }
 };
 
+// --- PERUBAHAN DI SINI ---
+// ID Koin Hero untuk disaring
+const HERO_COIN_IDS = ['bitcoin', 'ethereum', 'solana'];
+// --- AKHIR PERUBAHAN ---
+
 const AppContent: React.FC = () => {
   // --- STATE DEFINITIONS ---
   const [pageHistory, setPageHistory] = useState<Page[]>(['home']);
@@ -152,18 +158,22 @@ const AppContent: React.FC = () => {
   const [fullCoinList, setFullCoinList] = useState<CoinListItem[]>([]);
   const [isCoinListLoading, setIsCoinListLoading] = useState(true);
   const [coinListError, setCoinListError] = useState<string | null>(null);
-  const [trendingCoins, setTrendingCoins] = useState<CryptoData[]>([]);
-  const [isTrendingLoading, setIsTrendingLoading] = useState(true);
-  const [trendingError, setTrendingError] = useState<string | null>(null);
-  const [searchedCoin, setSearchedCoin] = useState<CryptoData | null>(null);
-  
-  // --- PERUBAHAN DI SINI ---
+
+  // --- PERUBAHAN STATE BERANDA ---
+  const [heroCoins, setHeroCoins] = useState<CryptoData[]>([]);
+  const [topGainers, setTopGainers] = useState<CryptoData[]>([]);
+  const [topLosers, setTopLosers] = useState<CryptoData[]>([]);
+  const [topSideways, setTopSideways] = useState<CryptoData[]>([]);
+  const [isMarketDataLoading, setIsMarketDataLoading] = useState(true);
+  const [marketDataError, setMarketDataError] = useState<string | null>(null);
+  // State lama (trendingCoins, isTrendingLoading, trendingError, searchedCoin) dihapus
+  // --- AKHIR PERUBAHAN STATE BERANDA ---
+
   const [rooms, setRooms] = useState<Room[]>([
     { id: 'berita-kripto', name: 'Berita Kripto', userCount: 0, isDefaultRoom: true },
     { id: 'pengumuman-aturan', name: 'Pengumuman & Aturan', userCount: 0, isDefaultRoom: true },
     { id: 'tanya-atmin', name: 'Tanya #atmin', userCount: 0, isDefaultRoom: true }
   ]);
-  // --- AKHIR PERUBAHAN ---
   
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [joinedRoomIds, setJoinedRoomIds] = useState<Set<string>>(() => {
@@ -295,19 +305,48 @@ const AppContent: React.FC = () => {
     }
   }, [currentRoom]);
 
-  const fetchTrendingData = useCallback(async (showSkeleton = true) => {
-    if (showSkeleton) { setIsTrendingLoading(true); setTrendingError(null); }
-    try { setTrendingCoins(await fetchTrendingCoins()); }
-    catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Gagal memuat data tren.';
-      if (showSkeleton) setTrendingError(errorMessage);
-      else console.error('Gagal menyegarkan data tren:', errorMessage);
-    } finally { if (showSkeleton) setIsTrendingLoading(false); }
+  // --- PERUBAHAN FUNGSI DATA BERANDA ---
+  const fetchHomepageData = useCallback(async (showSkeleton = true) => {
+    if (showSkeleton) { setIsMarketDataLoading(true); setMarketDataError(null); }
+    try {
+      // 1. Ambil 3 Koin Hero dan 1000 Koin Pasar secara bersamaan
+      const [heroData, marketData] = await Promise.all([
+        fetchHeroCoins(),
+        fetchMarketMoversData()
+      ]);
+      
+      setHeroCoins(heroData);
+
+      // 2. Saring 1000 koin (buang koin hero)
+      const filteredMarket = marketData.filter(coin => !HERO_COIN_IDS.includes(coin.id));
+
+      // 3. Urutkan untuk Top 10 Gainers
+      const gainers = [...filteredMarket].sort((a, b) => (b.change || -Infinity) - (a.change || -Infinity));
+      setTopGainers(gainers.slice(0, 10));
+
+      // 4. Urutkan untuk Top 10 Losers
+      const losers = [...filteredMarket].sort((a, b) => (a.change || Infinity) - (b.change || Infinity));
+      setTopLosers(losers.slice(0, 10));
+
+      // 5. Urutkan untuk Top 10 Sideways (paling dekat dengan 0)
+      const sideways = [...filteredMarket].sort((a, b) => Math.abs(a.change || 0) - Math.abs(b.change || 0));
+      setTopSideways(sideways.slice(0, 10));
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Gagal memuat data pasar.';
+      if (showSkeleton) setMarketDataError(errorMessage);
+      else console.error('Gagal menyegarkan data pasar:', errorMessage);
+    } finally {
+      if (showSkeleton) setIsMarketDataLoading(false);
+    }
   }, []);
+  // --- AKHIR PERUBAHAN FUNGSI DATA BERANDA ---
 
   const handleResetToTrending = useCallback(() => {
-    setSearchedCoin(null);
-  }, []);
+    // Fungsi ini tidak lagi relevan karena tidak ada "searched coin"
+    // Tapi kita bisa gunakan untuk refresh manual jika tombolnya ada
+    fetchHomepageData(true);
+  }, [fetchHomepageData]);
 
   const handleReloadPage = useCallback(() => {
     console.log("Reload page requested by user.");
@@ -448,7 +487,7 @@ const AppContent: React.FC = () => {
     
     if (page === 'home') {
       if (currentPage === 'home') {
-        handleResetToTrending(); 
+        // handleResetToTrending(); // Dihapus karena 'searchedCoin' dihapus
       } else {
         setPageHistory(prev => [...prev, 'home']);
       }
@@ -461,24 +500,15 @@ const AppContent: React.FC = () => {
     } else if (page !== currentPage) {
       setPageHistory(prev => [...prev, page]);
     }
-  }, [pageHistory, currentRoom, leaveCurrentRoom, handleResetToTrending]);
+  }, [pageHistory, currentRoom, leaveCurrentRoom]);
 
-  const handleSelectCoin = useCallback(async (coinId: string) => {
-    setIsTrendingLoading(true); setTrendingError(null); setSearchedCoin(null);
-    try { setSearchedCoin(await fetchCoinDetails(coinId)); }
-    catch (err) { setTrendingError(err instanceof Error ? err.message : 'Gagal muat detail koin.'); }
-    finally { setIsTrendingLoading(false); }
-  }, []);
+  // --- handleSelectCoin dihapus ---
 
   const handleAndroidBackButton = useCallback(() => {
     const currentPage = pageHistory[pageHistory.length - 1];
     console.log(`[Back Button] handleAndroidBackButton. History:`, pageHistory);
 
-    if (currentPage === 'home' && searchedCoin) {
-      console.log("[Back Button] Clearing searched coin.");
-      handleResetToTrending(); 
-      return true; // DITANGANI
-    }
+    // --- Logika searchedCoin dihapus ---
 
     if (pageHistory.length > 1) {
       if (currentPage === 'forum') {
@@ -493,7 +523,7 @@ const AppContent: React.FC = () => {
 
     console.log("[Back Button] Already at root. Let Android exit.");
     return false; // TIDAK DITANGANI
-  }, [pageHistory, leaveCurrentRoom, searchedCoin, handleResetToTrending]);
+  }, [pageHistory, leaveCurrentRoom]);
 
   useEffect(() => {
     console.log("Attaching functions to window for AndroidBridge...");
@@ -1006,7 +1036,10 @@ const AppContent: React.FC = () => {
   }, [database, currentRoom, handleLogout]); // handleLogout ditambahkan sebagai dependency
 
   // Efek untuk mengambil data (API calls, dll)
-  useEffect(() => { fetchTrendingData(); }, [fetchTrendingData]);
+  // --- PERUBAHAN EFEK DATA BERANDA ---
+  useEffect(() => { fetchHomepageData(); }, [fetchHomepageData]);
+  // --- AKHIR PERUBAHAN EFEK DATA BERANDA ---
+  
   useEffect(() => {
     const getRate = async () => {
       setIsRateLoading(true);
@@ -1016,16 +1049,21 @@ const AppContent: React.FC = () => {
     };
     getRate();
   }, []);
+  
   useEffect(() => {
     const fetchList = async () => {
       setIsCoinListLoading(true);
       setCoinListError(null);
-      try { setFullCoinList(await fetchTop500Coins()); }
+      try { 
+        // Menggunakan fungsi list ringan yang baru
+        setFullCoinList(await fetchTop500CoinsList()); 
+      }
       catch (err) { setCoinListError('Gagal ambil daftar koin.'); }
       finally { setIsCoinListLoading(false); }
     };
     fetchList();
-  }, []);
+  }, []); // dep fetchTop500CoinsList ditambahkan
+
   useEffect(() => {
     const savedNews = localStorage.getItem('cryptoNews');
     const lastFetch = localStorage.getItem('lastNewsFetch');
@@ -1229,16 +1267,28 @@ const AppContent: React.FC = () => {
       playNotificationSound(); 
       lastSoundPlayTimeRef.current = now; 
     }
-    prevTotalUnreadRef.current = currentTotal;
+    prevTotalUnreadRef.current = totalUnreadCount;
   }, [totalUnreadCount]);
 
   const updatedRooms = useMemo(() => {
     return rooms.map(room => ({ ...room, userCount: roomUserCounts[room.id] || room.userCount || 0 }));
   }, [rooms, roomUserCounts]);
   const totalUsers = useMemo(() => updatedRooms.reduce((sum, r) => sum + (r.userCount || 0), 0), [updatedRooms]);
-  const heroCoin = useMemo(() => searchedCoin || trendingCoins[0] || null, [searchedCoin, trendingCoins]);
-  const otherTrendingCoins = useMemo(() => searchedCoin ? [] : trendingCoins.slice(1), [searchedCoin, trendingCoins]);
-  const hotCoinForHeader = useMemo(() => trendingCoins.length > 1 ? { name: trendingCoins[1].name, logo: trendingCoins[1].image, price: trendingCoins[1].price, change: trendingCoins[1].change } : null, [trendingCoins]);
+  
+  // --- PERUBAHAN MEMOIZED VALUE ---
+  const hotCoinForHeader = useMemo(() => {
+    if (topGainers.length > 0) {
+      return { 
+        name: topGainers[0].name, 
+        logo: topGainers[0].image, 
+        price: topGainers[0].price, 
+        change: topGainers[0].change 
+      };
+    }
+    return null;
+  }, [topGainers]);
+  // --- AKHIR PERUBAHAN MEMOIZED VALUE ---
+
   const currentTypingUsers = useMemo(() => {
     const currentRoomId = currentRoom?.id;
     if (!currentRoomId || !typingUsers || typeof typingUsers !== 'object') { return []; }
@@ -1268,12 +1318,15 @@ const AppContent: React.FC = () => {
                   fullCoinList={fullCoinList} 
                   isCoinListLoading={isCoinListLoading} 
                   coinListError={coinListError} 
-                  heroCoin={heroCoin} 
-                  otherTrendingCoins={otherTrendingCoins} 
-                  isTrendingLoading={isTrendingLoading} 
-                  trendingError={trendingError} 
-                  onSelectCoin={handleSelectCoin} 
-                  onReloadTrending={handleReloadPage} 
+                  // --- PERUBAHAN PROPS ---
+                  heroCoins={heroCoins}
+                  topGainers={topGainers}
+                  topLosers={topLosers}
+                  topSideways={topSideways}
+                  isMarketDataLoading={isMarketDataLoading}
+                  marketDataError={marketDataError}
+                  onReloadMarketData={fetchHomepageData}
+                  // --- AKHIR PERUBAHAN PROPS ---
                 />;
       case 'rooms':
         return <RoomsListPage 

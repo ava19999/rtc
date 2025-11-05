@@ -1,40 +1,40 @@
-// HomePage.tsx
+// components/HomePage.tsx
 import React, { useState, useCallback, useRef, lazy, Suspense, useEffect } from 'react';
 import { fetchCryptoAnalysis } from '../services/geminiService';
 import CryptoCard from './CryptoCard';
-import type { HomePageProps, MarketDominance, CryptoData, AnalysisResult, ExchangeTicker, CoinListItem } from '../types';
-import HeroCoin from './HeroCoin';
+import type { HomePageProps, CryptoData, AnalysisResult, ExchangeTicker, CoinListItem } from '../types';
+// --- PERUBAHAN DI SINI ---
+// HeroCoin dihapus.
+// import HeroCoin from './HeroCoin';
 import DominanceTicker from './DominanceTicker';
 import {
   fetchMarketDominance,
   fetchExchangeTickers,
+  fetchCoinDetails, // Diimpor untuk logika pencarian
 } from '../services/mockData';
+// --- AKHIR PERUBAHAN ---
 
 const AnalysisModal = lazy(() => import('./AnalysisModal'));
 
-const SkeletonHero = () => (
-    <div className="bg-gray-900 border border-white/10 rounded-xl p-4 w-full relative overflow-hidden">
-        <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-                <div className="flex items-center mb-3">
-                    <div className="h-10 w-10 bg-gray-700 rounded-full mr-3"></div>
-                    <div className="flex-1 space-y-1.5">
-                        <div className="h-5 w-3/4 bg-gray-700 rounded"></div>
-                        <div className="h-3 w-1/4 bg-gray-700 rounded"></div>
-                    </div>
-                </div>
-                <div className="h-8 w-1/2 bg-gray-700 rounded my-1.5"></div>
-                <div className="h-16 w-full bg-gray-700 rounded mt-3"></div>
-            </div>
-            <div className="w-full md:w-1/3 space-y-3">
-                <div className="h-7 w-full bg-gray-700 rounded"></div>
-                <div className="h-7 w-full bg-gray-700 rounded"></div>
-                <div className="h-10 w-full bg-gray-700 rounded mt-3"></div>
-            </div>
-        </div>
-        <div className="absolute top-0 left-0 w-full h-full skeleton-shimmer"></div>
-    </div>
+// --- PERUBAHAN DI SINI ---
+// SkeletonHero dihapus karena layoutnya berubah
+
+// Skeleton untuk 3 koin hero
+const SkeletonHeroCards = () => (
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+    <SkeletonCard />
+    <SkeletonCard />
+    <SkeletonCard />
+  </div>
 );
+
+// Skeleton untuk baris slider
+const SkeletonCardRow = () => (
+  <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar mt-2">
+    {Array.from({ length: 5 }).map((_, index) => <SkeletonCard key={index} />)}
+  </div>
+);
+// --- AKHIR PERUBAHAN ---
 
 const SkeletonCard = () => (
   <div className="bg-gray-900 border border-white/10 rounded-xl p-3 h-full w-48 flex-shrink-0 relative overflow-hidden">
@@ -54,7 +54,16 @@ const SkeletonCard = () => (
 const HomePage: React.FC<HomePageProps> = ({ 
     idrRate, isRateLoading, currency, onIncrementAnalysisCount, 
     fullCoinList, isCoinListLoading, coinListError,
-    heroCoin, otherTrendingCoins, isTrendingLoading, trendingError, onSelectCoin, onReloadTrending
+    // --- PROPS BARU ---
+    heroCoins,
+    topGainers,
+    topLosers,
+    topSideways,
+    isMarketDataLoading,
+    marketDataError,
+    onReloadMarketData
+    // --- PROPS LAMA DIHAPUS ---
+    // heroCoin, otherTrendingCoins, isTrendingLoading, trendingError, onSelectCoin, onReloadTrending
 }) => {
   const [marketDominance, setMarketDominance] = useState<MarketDominance | null>(null);
   const [isDominanceLoading, setIsDominanceLoading] = useState(true);
@@ -71,6 +80,9 @@ const HomePage: React.FC<HomePageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredCoinList, setFilteredCoinList] = useState<CoinListItem[]>([]);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  
+  // State baru untuk loading pencarian
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
 
   const fetchDominanceData = useCallback(async () => {
     setIsDominanceLoading(true);
@@ -108,12 +120,7 @@ const HomePage: React.FC<HomePageProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSearchSelect = useCallback(async (coinId: string) => {
-    setSearchQuery('');
-    setFilteredCoinList([]);
-    onSelectCoin(coinId);
-  }, [onSelectCoin]);
-
+  // --- LOGIKA PENCARIAN DIPERBARUI ---
   const handleAnalyze = useCallback(async (crypto: CryptoData) => {
     onIncrementAnalysisCount(crypto.id);
     setSelectedCrypto(crypto); setIsModalOpen(true);
@@ -131,43 +138,100 @@ const HomePage: React.FC<HomePageProps> = ({
       .finally(() => setIsTickersLoading(false));
   }, [onIncrementAnalysisCount]);
 
+  const handleSearchSelect = useCallback(async (coinId: string) => {
+    setSearchQuery('');
+    setFilteredCoinList([]);
+    setIsSearchLoading(true);
+    
+    try {
+      const coinData = await fetchCoinDetails(coinId);
+      handleAnalyze(coinData);
+    } catch (err) {
+      console.error("Gagal mengambil detail koin dari pencarian:", err);
+      // Mungkin tampilkan notifikasi error kecil nanti
+    } finally {
+      setIsSearchLoading(false);
+    }
+  }, [handleAnalyze]);
+  // --- AKHIR LOGIKA PENCARIAN DIPERBARUI ---
+
   const closeModal = () => { setIsModalOpen(false); setSelectedCrypto(null); };
   
+  // --- RENDERCONTENT DITULIS ULANG TOTAL ---
   const renderContent = () => {
-    if (isTrendingLoading) {
+    if (isMarketDataLoading) {
       return (
         <>
-          <SkeletonHero />
-          <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar mt-4">
-            {Array.from({ length: 4 }).map((_, index) => <SkeletonCard key={index} />)}
+          <SkeletonHeroCards />
+          <div className="mt-4 space-y-4">
+            <h3 className="text-base font-bold text-gray-700 bg-gray-700/50 rounded w-1/3 h-5 animate-pulse"></h3>
+            <SkeletonCardRow />
+            <h3 className="text-base font-bold text-gray-700 bg-gray-700/50 rounded w-1/3 h-5 animate-pulse"></h3>
+            <SkeletonCardRow />
+            <h3 className="text-base font-bold text-gray-700 bg-gray-700/50 rounded w-1/3 h-5 animate-pulse"></h3>
+            <SkeletonCardRow />
           </div>
         </>
       );
     }
-    if (trendingError) {
+    if (marketDataError) {
       return (
         <div className="flex flex-col items-center justify-center h-48 text-center">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-magenta mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <p className="text-base font-semibold text-red-400">Tidak Dapat Memuat Data</p>
-            <p className="text-gray-400 mt-1.5 mb-3 max-w-md text-sm">{trendingError}</p>
-            <button onClick={onReloadTrending} className="bg-electric/80 hover:bg-electric text-white font-semibold py-1.5 px-4 rounded-lg transition-all duration-300 text-sm">Coba Lagi</button>
+            <p className="text-gray-400 mt-1.5 mb-3 max-w-md text-sm">{marketDataError}</p>
+            <button onClick={onReloadMarketData} className="bg-electric/80 hover:bg-electric text-white font-semibold py-1.5 px-4 rounded-lg transition-all duration-300 text-sm">Coba Lagi</button>
         </div>
       );
     }
     return (
-      <div className="animate-fade-in-content">
-        {heroCoin && <HeroCoin crypto={heroCoin} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />}
-        {otherTrendingCoins.length > 0 && (
-          <div className="mt-4">
-             <h3 className="text-base font-bold text-gray-300 mb-2">Peluang Pasar Lainnya</h3>
+      <div className="animate-fade-in-content space-y-4">
+        
+        {/* 1. Tiga Koin Hero */}
+        {heroCoins.length > 0 && (
+          <div>
+            <h3 className="text-base font-bold text-gray-300 mb-2">Koin Utama</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {heroCoins.map(crypto => (
+                <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 2. Top 10 Kenaikan */}
+        {topGainers.length > 0 && (
+          <div>
+             <h3 className="text-base font-bold text-gray-300 mb-2">Top 10 Kenaikan</h3>
              <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar">
-                {otherTrendingCoins.map(crypto => <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />)}
+                {topGainers.map(crypto => <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />)}
+             </div>
+          </div>
+        )}
+        
+        {/* 3. Top 10 Sideways */}
+        {topSideways.length > 0 && (
+          <div>
+             <h3 className="text-base font-bold text-gray-300 mb-2">Top 10 Sideways</h3>
+             <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar">
+                {topSideways.map(crypto => <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />)}
+             </div>
+          </div>
+        )}
+        
+        {/* 4. Top 10 Penurunan */}
+        {topLosers.length > 0 && (
+          <div>
+             <h3 className="text-base font-bold text-gray-300 mb-2">Top 10 Penurunan</h3>
+             <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar">
+                {topLosers.map(crypto => <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />)}
              </div>
           </div>
         )}
       </div>
     );
   }
+  // --- AKHIR RENDERCONTENT ---
 
   return (
     <div className="animate-fade-in">
@@ -178,8 +242,16 @@ const HomePage: React.FC<HomePageProps> = ({
                     <p className="text-gray-400 text-xs mt-0.5">Data paling gacor hari ini, dianalisis pake AI.</p>
                 </div>
                  <div className="relative w-full sm:max-w-xs" ref={searchContainerRef}>
-                    <input type="text" placeholder="Cari 500 koin teratas..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 pl-9 pr-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-electric transition-all text-sm" />
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    <input type="text" placeholder="Cari 500 koin teratas..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 pl-9 pr-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-electric transition-all text-sm" disabled={isSearchLoading} />
+                    
+                    {isSearchLoading ? (
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-electric/80"></div>
+                      </div>
+                    ) : (
+                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    )}
+                    
                     {(searchQuery.length > 0) && (
                         <ul className="absolute top-full mt-1.5 w-full bg-gray-900/80 backdrop-blur-md border border-white/10 rounded-lg shadow-lg max-h-64 overflow-y-auto z-30">
                           {isCoinListLoading ? (

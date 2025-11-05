@@ -155,6 +155,7 @@ export interface HeaderProps {
   idrRate: number | null;
 }
 
+// --- PERUBAHAN DI SINI ---
 export interface HomePageProps {
   idrRate: number | null;
   isRateLoading: boolean;
@@ -163,13 +164,21 @@ export interface HomePageProps {
   fullCoinList: CoinListItem[];
   isCoinListLoading: boolean;
   coinListError: string | null;
-  heroCoin: CryptoData | null;
-  otherTrendingCoins: CryptoData[];
-  isTrendingLoading: boolean;
-  trendingError: string | null;
-  onSelectCoin: (coinId: string) => void;
-  onReloadTrending: () => void;
+  
+  // Data baru untuk 3 koin hero
+  heroCoins: CryptoData[];
+  
+  // Data baru untuk 3 slider peluang
+  topGainers: CryptoData[];
+  topLosers: CryptoData[];
+  topSideways: CryptoData[];
+
+  // Status loading baru
+  isMarketDataLoading: boolean;
+  marketDataError: string | null;
+  onReloadMarketData: () => void;
 }
+// --- AKHIR PERUBAHAN ---
 
 export interface ForumPageProps {
   room: Room | null;
@@ -337,10 +346,23 @@ export interface AppState {
   fullCoinList: CoinListItem[];
   isCoinListLoading: boolean;
   coinListError: string | null;
-  trendingCoins: CryptoData[];
-  isTrendingLoading: boolean;
-  trendingError: string | null;
-  searchedCoin: CryptoData | null;
+  
+  // --- PERUBAHAN DI SINI ---
+  // Data lama dihapus
+  // trendingCoins: CryptoData[];
+  // isTrendingLoading: boolean;
+  // trendingError: string | null;
+  // searchedCoin: CryptoData | null;
+  
+  // Data baru ditambahkan
+  heroCoins: CryptoData[];
+  topGainers: CryptoData[];
+  topLosers: CryptoData[];
+  topSideways: CryptoData[];
+  isMarketDataLoading: boolean;
+  marketDataError: string | null;
+  // --- AKHIR PERUBAHAN ---
+
   rooms: Room[];
   currentRoom: Room | null;
   joinedRoomIds: Set<string>;
@@ -424,6 +446,7 @@ export interface FirebaseConfig {
 }
 
 // --- Event Handler Types ---
+// --- PERUBAHAN DI SINI ---
 export interface NavigationHandlers {
   onNavigate: (page: Page) => void;
   onLogout: () => void;
@@ -435,8 +458,14 @@ export interface NavigationHandlers {
   onSendMessage: (message: Partial<ChatMessage>) => void;
   onReact: (messageId: string, emoji: string) => void;
   onDeleteMessage: (roomId: string, messageId: string) => void;
-  onSelectCoin: (coinId: string) => void;
-  onReloadTrending: () => void;
+  
+  // Handler lama dihapus
+  // onSelectCoin: (coinId: string) => void;
+  // onReloadTrending: () => void;
+  
+  // Handler baru ditambahkan
+  onReloadMarketData: () => void;
+  
   onIncrementAnalysisCount: (coinId: string) => void;
   onToggleNotification: (roomId: string, enabled: boolean) => void;
   onCurrencyChange: (currency: Currency) => void;
@@ -446,6 +475,7 @@ export interface NavigationHandlers {
   onStartTyping: () => void; // Tambahkan handler
   onStopTyping: () => void; // Tambahkan handler
 }
+// --- AKHIR PERUBAHAN ---
 
 
 // --- Local Storage Types ---

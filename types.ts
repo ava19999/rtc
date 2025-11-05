@@ -15,6 +15,7 @@ export interface GoogleProfile {
 export interface User {
   email: string;
   username: string;
+  // password?: string; // <-- SUDAH DIHAPUS (Bagus!)
   googleProfilePicture?: string;
   createdAt: number;
 }
@@ -70,7 +71,7 @@ export interface Room {
   name: string;
   userCount: number;
   createdBy?: string;
-  createdById?: string; 
+  createdById?: string; // <-- PERUBAHAN: DITAMBAHKAN
   isDefaultRoom?: boolean;
 }
 
@@ -154,7 +155,6 @@ export interface HeaderProps {
   idrRate: number | null;
 }
 
-// --- PERUBAHAN DI SINI ---
 export interface HomePageProps {
   idrRate: number | null;
   isRateLoading: boolean;
@@ -163,19 +163,13 @@ export interface HomePageProps {
   fullCoinList: CoinListItem[];
   isCoinListLoading: boolean;
   coinListError: string | null;
-  
-  // Data baru untuk 3 koin hero
-  heroCoins: CryptoData[];
-  
-  // Data lama dikembalikan
-  trendingCoins: CryptoData[];
-
-  // Status loading baru
-  isMarketDataLoading: boolean;
-  marketDataError: string | null;
-  onReloadMarketData: () => void;
+  heroCoin: CryptoData | null;
+  otherTrendingCoins: CryptoData[];
+  isTrendingLoading: boolean;
+  trendingError: string | null;
+  onSelectCoin: (coinId: string) => void;
+  onReloadTrending: () => void;
 }
-// --- AKHIR PERUBAHAN ---
 
 export interface ForumPageProps {
   room: Room | null;
@@ -185,6 +179,8 @@ export interface ForumPageProps {
   onLeaveRoom: () => void;
   onReact: (messageId: string, emoji: string) => void;
   onDeleteMessage: (roomId: string, messageId: string) => void;
+  // forumActiveUsers?: number; // <-- DIHAPUS
+  // Tambahkan props untuk typing indicator
   typingUsers: TypingStatus[];
   onStartTyping: () => void;
   onStopTyping: () => void;
@@ -331,6 +327,7 @@ export interface AppState {
   currency: Currency;
   idrRate: number | null;
   isRateLoading: boolean;
+  // users: { [email: string]: User }; // <-- DIHAPUS
   currentUser: User | null;
   pendingGoogleUser: GoogleProfile | null;
   firebaseUser: any | null;
@@ -340,14 +337,10 @@ export interface AppState {
   fullCoinList: CoinListItem[];
   isCoinListLoading: boolean;
   coinListError: string | null;
-  
-  // --- PERUBAHAN DI SINI ---
-  heroCoins: CryptoData[];
-  trendingCoins: CryptoData[]; // Dikembalikan
-  isMarketDataLoading: boolean;
-  marketDataError: string | null;
-  // --- AKHIR PERUBAHAN ---
-
+  trendingCoins: CryptoData[];
+  isTrendingLoading: boolean;
+  trendingError: string | null;
+  searchedCoin: CryptoData | null;
   rooms: Room[];
   currentRoom: Room | null;
   joinedRoomIds: Set<string>;
@@ -385,11 +378,11 @@ export interface FirebaseMessageData {
 }
 
 export interface FirebaseRoomData {
-  [key:string]: {
+  [key: string]: {
     name: string;
     userCount: number;
     createdBy?: string;
-    createdById?: string; 
+    createdById?: string; // <-- PERUBAHAN: DITAMBAHKAN
     createdAt?: number;
     isDefaultRoom?: boolean;
   };
@@ -431,7 +424,6 @@ export interface FirebaseConfig {
 }
 
 // --- Event Handler Types ---
-// --- PERUBAHAN DI SINI ---
 export interface NavigationHandlers {
   onNavigate: (page: Page) => void;
   onLogout: () => void;
@@ -443,23 +435,22 @@ export interface NavigationHandlers {
   onSendMessage: (message: Partial<ChatMessage>) => void;
   onReact: (messageId: string, emoji: string) => void;
   onDeleteMessage: (roomId: string, messageId: string) => void;
-  
-  onReloadMarketData: () => void;
-  
+  onSelectCoin: (coinId: string) => void;
+  onReloadTrending: () => void;
   onIncrementAnalysisCount: (coinId: string) => void;
   onToggleNotification: (roomId: string, enabled: boolean) => void;
   onCurrencyChange: (currency: Currency) => void;
   onGoogleRegisterSuccess: (credentialResponse: CredentialResponse) => void;
   onProfileComplete: (username: string, password: string) => Promise<string | void>;
-  onUpdateUserActivity?: (roomId: string, userId: string, username: string) => void; 
-  onStartTyping: () => void; 
-  onStopTyping: () => void; 
+  onUpdateUserActivity?: (roomId: string, userId: string, username: string) => void; // Ditambahkan
+  onStartTyping: () => void; // Tambahkan handler
+  onStopTyping: () => void; // Tambahkan handler
 }
-// --- AKHIR PERUBAHAN ---
 
 
 // --- Local Storage Types ---
 export interface LocalStorageData {
+  // cryptoUsers: string; // <-- DIHAPUS
   currentUser: string;
   joinedRoomIds: string;
   unreadCounts: string;
@@ -483,7 +474,7 @@ export interface RoomCreationData {
   name: string;
   userCount: number;
   createdBy: string;
-  createdById: string; 
+  createdById: string; // <-- PERUBAHAN: DITAMBAHKAN
   createdAt: number;
   isDefaultRoom?: boolean;
 }
@@ -553,6 +544,7 @@ export interface RoomListDisplay {
 
 // --- Extended ForumPageProps untuk menerima forumActiveUsers ---
 export interface ExtendedForumPageProps extends ForumPageProps {
+  // forumActiveUsers?: number; // <-- DIHAPUS
 }
 
 // --- User Count Display Configuration ---
@@ -566,9 +558,9 @@ export interface UserCountDisplayConfig {
 
 // Default configuration
 export const DEFAULT_USER_COUNT_CONFIG: UserCountDisplayConfig = {
-  showForDefaultRooms: false, 
-  showForCustomRooms: true,   
-  updateInterval: 30000,      
-  minUsers: 1,                
-  maxUsers: 1000              
+  showForDefaultRooms: false, // Room default tidak menampilkan user count
+  showForCustomRooms: true,   // Room custom menampilkan user count
+  updateInterval: 30000,      // 30 detik
+  minUsers: 1,                // Minimum 1 user
+  maxUsers: 1000              // Maximum 1000 user
 };

@@ -1,20 +1,18 @@
-// components/HomePage.tsx
+// HomePage.tsx
 import React, { useState, useCallback, useRef, lazy, Suspense, useEffect } from 'react';
 import { fetchCryptoAnalysis } from '../services/geminiService';
 import CryptoCard from './CryptoCard';
-import type { HomePageProps, CryptoData, AnalysisResult, ExchangeTicker, CoinListItem } from '../types';
+import type { HomePageProps, MarketDominance, CryptoData, AnalysisResult, ExchangeTicker, CoinListItem } from '../types';
 import HeroCoin from './HeroCoin';
 import DominanceTicker from './DominanceTicker';
 import {
   fetchMarketDominance,
   fetchExchangeTickers,
-  fetchCoinDetails, // Diimpor untuk logika pencarian
 } from '../services/mockData';
 
 const AnalysisModal = lazy(() => import('./AnalysisModal'));
 
-// --- Skeleton untuk Hero Slider BARU ---
-const SkeletonHeroSlider = () => (
+const SkeletonHero = () => (
     <div className="bg-gray-900 border border-white/10 rounded-xl p-4 w-full relative overflow-hidden">
         <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
@@ -38,13 +36,6 @@ const SkeletonHeroSlider = () => (
     </div>
 );
 
-// Skeleton untuk baris slider
-const SkeletonCardRow = () => (
-  <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar mt-2">
-    {Array.from({ length: 5 }).map((_, index) => <SkeletonCard key={index} />)}
-  </div>
-);
-
 const SkeletonCard = () => (
   <div className="bg-gray-900 border border-white/10 rounded-xl p-3 h-full w-48 flex-shrink-0 relative overflow-hidden">
     <div className="flex items-center mb-3">
@@ -60,101 +51,10 @@ const SkeletonCard = () => (
   </div>
 );
 
-// --- KOMPONEN BARU: HERO SLIDER ---
-const HeroSlider: React.FC<{
-  coins: CryptoData[];
-  onAnalyze: (crypto: CryptoData) => void;
-  idrRate: number | null;
-  currency: Currency;
-}> = ({ coins, onAnalyze, idrRate, currency }) => {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const resetTimeout = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-  };
-
-  useEffect(() => {
-    resetTimeout();
-    timeoutRef.current = setTimeout(
-      () => setActiveIndex((prevIndex) => (prevIndex === coins.length - 1 ? 0 : prevIndex + 1)),
-      5000 // Ganti slide setiap 5 detik
-    );
-    return () => resetTimeout();
-  }, [activeIndex, coins.length]);
-
-  const setSlide = (index: number) => {
-    resetTimeout();
-    setActiveIndex(index);
-  };
-
-  const nextSlide = () => setSlide(activeIndex === coins.length - 1 ? 0 : activeIndex + 1);
-  const prevSlide = () => setSlide(activeIndex === 0 ? coins.length - 1 : activeIndex - 1);
-
-  if (!coins || coins.length === 0) {
-    return <SkeletonHeroSlider />;
-  }
-
-  return (
-    <div className="relative w-full">
-      <div className="overflow-hidden relative">
-        <div
-          className="whitespace-nowrap transition-transform duration-500 ease-in-out"
-          style={{ transform: `translateX(-${activeIndex * 100}%)` }}
-        >
-          {coins.map((coin) => (
-            <div className="inline-block w-full whitespace-normal" key={coin.id}>
-              <HeroCoin crypto={coin} onAnalyze={onAnalyze} idrRate={idrRate} currency={currency} />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Kontrol Manual */}
-      <button
-        onClick={prevSlide}
-        className="absolute top-1/2 left-0 -translate-y-1/2 bg-black/20 hover:bg-white/20 text-white p-2 rounded-full transition-colors z-10"
-        aria-label="Previous Slide"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-      </button>
-      <button
-        onClick={nextSlide}
-        className="absolute top-1/2 right-0 -translate-y-1/2 bg-black/20 hover:bg-white/20 text-white p-2 rounded-full transition-colors z-10"
-        aria-label="Next Slide"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-      </button>
-
-      {/* Indikator Titik */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2 z-10">
-        {coins.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => setSlide(index)}
-            className={`w-2 h-2 rounded-full transition-all duration-300 ${
-              activeIndex === index ? 'bg-electric p-1' : 'bg-white/40 hover:bg-white/70'
-            }`}
-            aria-label={`Go to slide ${index + 1}`}
-          />
-        ))}
-      </div>
-    </div>
-  );
-};
-// --- AKHIR KOMPONEN HERO SLIDER ---
-
 const HomePage: React.FC<HomePageProps> = ({ 
     idrRate, isRateLoading, currency, onIncrementAnalysisCount, 
     fullCoinList, isCoinListLoading, coinListError,
-    // --- PROPS BARU ---
-    heroCoins,
-    trendingCoins,
-    isMarketDataLoading,
-    marketDataError,
-    onReloadMarketData
+    heroCoin, otherTrendingCoins, isTrendingLoading, trendingError, onSelectCoin, onReloadTrending
 }) => {
   const [marketDominance, setMarketDominance] = useState<MarketDominance | null>(null);
   const [isDominanceLoading, setIsDominanceLoading] = useState(true);
@@ -171,8 +71,6 @@ const HomePage: React.FC<HomePageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredCoinList, setFilteredCoinList] = useState<CoinListItem[]>([]);
   const searchContainerRef = useRef<HTMLDivElement>(null);
-  
-  const [isSearchLoading, setIsSearchLoading] = useState(false);
 
   const fetchDominanceData = useCallback(async () => {
     setIsDominanceLoading(true);
@@ -210,6 +108,12 @@ const HomePage: React.FC<HomePageProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const handleSearchSelect = useCallback(async (coinId: string) => {
+    setSearchQuery('');
+    setFilteredCoinList([]);
+    onSelectCoin(coinId);
+  }, [onSelectCoin]);
+
   const handleAnalyze = useCallback(async (crypto: CryptoData) => {
     onIncrementAnalysisCount(crypto.id);
     setSelectedCrypto(crypto); setIsModalOpen(true);
@@ -226,72 +130,44 @@ const HomePage: React.FC<HomePageProps> = ({
       .catch(err => setTickersError(err.message))
       .finally(() => setIsTickersLoading(false));
   }, [onIncrementAnalysisCount]);
-  
-  const handleSearchSelect = useCallback(async (coinId: string) => {
-    setSearchQuery('');
-    setFilteredCoinList([]);
-    setIsSearchLoading(true);
-    
-    try {
-      // onSelectCoin(coinId) diganti dengan fetch + analyze
-      const coinData = await fetchCoinDetails(coinId);
-      handleAnalyze(coinData);
-    } catch (err) {
-      console.error("Gagal mengambil detail koin dari pencarian:", err);
-    } finally {
-      setIsSearchLoading(false);
-    }
-  }, [handleAnalyze]); // onSelectCoin dihapus dari dependensi
 
   const closeModal = () => { setIsModalOpen(false); setSelectedCrypto(null); };
   
-  // --- RENDERCONTENT DITULIS ULANG TOTAL ---
   const renderContent = () => {
-    if (isMarketDataLoading) {
+    if (isTrendingLoading) {
       return (
         <>
-          <SkeletonHeroSlider />
-          <div className="mt-4">
-            <h3 className="text-base font-bold text-gray-700 bg-gray-700/50 rounded w-1/3 h-5 animate-pulse"></h3>
-            <SkeletonCardRow />
+          <SkeletonHero />
+          <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar mt-4">
+            {Array.from({ length: 4 }).map((_, index) => <SkeletonCard key={index} />)}
           </div>
         </>
       );
     }
-    if (marketDataError) {
+    if (trendingError) {
       return (
         <div className="flex flex-col items-center justify-center h-48 text-center">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-magenta mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <p className="text-base font-semibold text-red-400">Tidak Dapat Memuat Data</p>
-            <p className="text-gray-400 mt-1.5 mb-3 max-w-md text-sm">{marketDataError}</p>
-            <button onClick={onReloadMarketData} className="bg-electric/80 hover:bg-electric text-white font-semibold py-1.5 px-4 rounded-lg transition-all duration-300 text-sm">Coba Lagi</button>
+            <p className="text-gray-400 mt-1.5 mb-3 max-w-md text-sm">{trendingError}</p>
+            <button onClick={onReloadTrending} className="bg-electric/80 hover:bg-electric text-white font-semibold py-1.5 px-4 rounded-lg transition-all duration-300 text-sm">Coba Lagi</button>
         </div>
       );
     }
     return (
-      <div className="animate-fade-in-content space-y-4">
-        
-        {/* 1. Slider 3 Koin Hero */}
-        <HeroSlider 
-          coins={heroCoins} 
-          onAnalyze={handleAnalyze} 
-          idrRate={idrRate} 
-          currency={currency} 
-        />
-
-        {/* 2. Top 7 Koin Trending */}
-        {trendingCoins.length > 0 && (
+      <div className="animate-fade-in-content">
+        {heroCoin && <HeroCoin crypto={heroCoin} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />}
+        {otherTrendingCoins.length > 0 && (
           <div className="mt-4">
-             <h3 className="text-base font-bold text-gray-300 mb-2">Peluang Pasar Lainnya (Top 7 Trending)</h3>
+             <h3 className="text-base font-bold text-gray-300 mb-2">Peluang Pasar Lainnya</h3>
              <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar">
-                {trendingCoins.map(crypto => <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />)}
+                {otherTrendingCoins.map(crypto => <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />)}
              </div>
           </div>
         )}
       </div>
     );
   }
-  // --- AKHIR RENDERCONTENT ---
 
   return (
     <div className="animate-fade-in">
@@ -302,16 +178,8 @@ const HomePage: React.FC<HomePageProps> = ({
                     <p className="text-gray-400 text-xs mt-0.5">Data paling gacor hari ini, dianalisis pake AI.</p>
                 </div>
                  <div className="relative w-full sm:max-w-xs" ref={searchContainerRef}>
-                    <input type="text" placeholder="Cari 500 koin teratas..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 pl-9 pr-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-electric transition-all text-sm" disabled={isSearchLoading} />
-                    
-                    {isSearchLoading ? (
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-electric/80"></div>
-                      </div>
-                    ) : (
-                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    )}
-                    
+                    <input type="text" placeholder="Cari 500 koin teratas..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 pl-9 pr-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-electric transition-all text-sm" />
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     {(searchQuery.length > 0) && (
                         <ul className="absolute top-full mt-1.5 w-full bg-gray-900/80 backdrop-blur-md border border-white/10 rounded-lg shadow-lg max-h-64 overflow-y-auto z-30">
                           {isCoinListLoading ? (

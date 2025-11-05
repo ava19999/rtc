@@ -15,7 +15,6 @@ export interface GoogleProfile {
 export interface User {
   email: string;
   username: string;
-  // password?: string; // <-- SUDAH DIHAPUS (Bagus!)
   googleProfilePicture?: string;
   createdAt: number;
 }
@@ -71,7 +70,7 @@ export interface Room {
   name: string;
   userCount: number;
   createdBy?: string;
-  createdById?: string; // <-- PERUBAHAN: DITAMBAHKAN
+  createdById?: string; 
   isDefaultRoom?: boolean;
 }
 
@@ -168,10 +167,8 @@ export interface HomePageProps {
   // Data baru untuk 3 koin hero
   heroCoins: CryptoData[];
   
-  // Data baru untuk 3 slider peluang
-  topGainers: CryptoData[];
-  topLosers: CryptoData[];
-  topSideways: CryptoData[];
+  // Data lama dikembalikan
+  trendingCoins: CryptoData[];
 
   // Status loading baru
   isMarketDataLoading: boolean;
@@ -188,8 +185,6 @@ export interface ForumPageProps {
   onLeaveRoom: () => void;
   onReact: (messageId: string, emoji: string) => void;
   onDeleteMessage: (roomId: string, messageId: string) => void;
-  // forumActiveUsers?: number; // <-- DIHAPUS
-  // Tambahkan props untuk typing indicator
   typingUsers: TypingStatus[];
   onStartTyping: () => void;
   onStopTyping: () => void;
@@ -336,7 +331,6 @@ export interface AppState {
   currency: Currency;
   idrRate: number | null;
   isRateLoading: boolean;
-  // users: { [email: string]: User }; // <-- DIHAPUS
   currentUser: User | null;
   pendingGoogleUser: GoogleProfile | null;
   firebaseUser: any | null;
@@ -348,17 +342,8 @@ export interface AppState {
   coinListError: string | null;
   
   // --- PERUBAHAN DI SINI ---
-  // Data lama dihapus
-  // trendingCoins: CryptoData[];
-  // isTrendingLoading: boolean;
-  // trendingError: string | null;
-  // searchedCoin: CryptoData | null;
-  
-  // Data baru ditambahkan
   heroCoins: CryptoData[];
-  topGainers: CryptoData[];
-  topLosers: CryptoData[];
-  topSideways: CryptoData[];
+  trendingCoins: CryptoData[]; // Dikembalikan
   isMarketDataLoading: boolean;
   marketDataError: string | null;
   // --- AKHIR PERUBAHAN ---
@@ -400,11 +385,11 @@ export interface FirebaseMessageData {
 }
 
 export interface FirebaseRoomData {
-  [key: string]: {
+  [key:string]: {
     name: string;
     userCount: number;
     createdBy?: string;
-    createdById?: string; // <-- PERUBAHAN: DITAMBAHKAN
+    createdById?: string; 
     createdAt?: number;
     isDefaultRoom?: boolean;
   };
@@ -459,11 +444,6 @@ export interface NavigationHandlers {
   onReact: (messageId: string, emoji: string) => void;
   onDeleteMessage: (roomId: string, messageId: string) => void;
   
-  // Handler lama dihapus
-  // onSelectCoin: (coinId: string) => void;
-  // onReloadTrending: () => void;
-  
-  // Handler baru ditambahkan
   onReloadMarketData: () => void;
   
   onIncrementAnalysisCount: (coinId: string) => void;
@@ -471,16 +451,15 @@ export interface NavigationHandlers {
   onCurrencyChange: (currency: Currency) => void;
   onGoogleRegisterSuccess: (credentialResponse: CredentialResponse) => void;
   onProfileComplete: (username: string, password: string) => Promise<string | void>;
-  onUpdateUserActivity?: (roomId: string, userId: string, username: string) => void; // Ditambahkan
-  onStartTyping: () => void; // Tambahkan handler
-  onStopTyping: () => void; // Tambahkan handler
+  onUpdateUserActivity?: (roomId: string, userId: string, username: string) => void; 
+  onStartTyping: () => void; 
+  onStopTyping: () => void; 
 }
 // --- AKHIR PERUBAHAN ---
 
 
 // --- Local Storage Types ---
 export interface LocalStorageData {
-  // cryptoUsers: string; // <-- DIHAPUS
   currentUser: string;
   joinedRoomIds: string;
   unreadCounts: string;
@@ -504,7 +483,7 @@ export interface RoomCreationData {
   name: string;
   userCount: number;
   createdBy: string;
-  createdById: string; // <-- PERUBAHAN: DITAMBAHKAN
+  createdById: string; 
   createdAt: number;
   isDefaultRoom?: boolean;
 }
@@ -574,7 +553,6 @@ export interface RoomListDisplay {
 
 // --- Extended ForumPageProps untuk menerima forumActiveUsers ---
 export interface ExtendedForumPageProps extends ForumPageProps {
-  // forumActiveUsers?: number; // <-- DIHAPUS
 }
 
 // --- User Count Display Configuration ---
@@ -588,9 +566,9 @@ export interface UserCountDisplayConfig {
 
 // Default configuration
 export const DEFAULT_USER_COUNT_CONFIG: UserCountDisplayConfig = {
-  showForDefaultRooms: false, // Room default tidak menampilkan user count
-  showForCustomRooms: true,   // Room custom menampilkan user count
-  updateInterval: 30000,      // 30 detik
-  minUsers: 1,                // Minimum 1 user
-  maxUsers: 1000              // Maximum 1000 user
+  showForDefaultRooms: false, 
+  showForCustomRooms: true,   
+  updateInterval: 30000,      
+  minUsers: 1,                
+  maxUsers: 1000              
 };

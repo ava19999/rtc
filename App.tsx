@@ -40,24 +40,24 @@ import type {
   FirebaseTypingStatusData
 } from './types';
 import { isNewsArticle, isChatMessage } from './types';
+// --- PERUBAHAN DI SINI ---
 import {
   fetchIdrRate,
   fetchNewsArticles,
-  fetchTop500CoinsList, // --- PERUBAHAN DI SINI --- (diganti nama)
-  fetchMarketMoversData, // --- PERUBAHAN DI SINI --- (baru)
-  fetchHeroCoins, // --- PERUBAHAN DI SINI --- (baru)
+  fetchTop500CoinsList, // Menggunakan list ringan untuk pencarian
+  fetchTrendingCoins,   // Dikembalikan
+  fetchHeroCoins,       // Baru
   fetchCoinDetails
 } from './services/mockData';
+// --- AKHIR PERUBAHAN ---
 import { ADMIN_USERNAMES } from './components/UserTag';
 import { database, getDatabaseInstance, testDatabaseConnection } from './services/firebaseService';
 import { 
   ref, set, push, onValue, off, update, get, Database, remove, onDisconnect,
-  query, orderByChild, equalTo // Pastikan query diimpor
+  query, orderByChild, equalTo 
 } from 'firebase/database';
 
-// --- PERUBAHAN DI SINI ---
 const DEFAULT_ROOM_IDS = ['berita-kripto', 'pengumuman-aturan', 'tanya-atmin'];
-// --- AKHIR PERUBAHAN ---
 
 const TYPING_TIMEOUT = 5000; // 5 detik
 
@@ -112,7 +112,6 @@ const Particles: React.FC = () => (
 
 // Helper function to update native app state for push notification suppression
 const updateNativeRoomState = (roomId: string | null) => {
-  // Memanggil bridge method yang ada di MainActivity
   if (typeof (window as any).AndroidBridge?.setCurrentRoomId === 'function') {
     (window as any).AndroidBridge.setCurrentRoomId(roomId || '');
     console.log(`[Bridge] Current room ID set to: ${roomId || 'null'}`);
@@ -135,11 +134,6 @@ const updateNativeSoundState = (enabled: boolean) => {
   }
 };
 
-// --- PERUBAHAN DI SINI ---
-// ID Koin Hero untuk disaring
-const HERO_COIN_IDS = ['bitcoin', 'ethereum', 'solana'];
-// --- AKHIR PERUBAHAN ---
-
 const AppContent: React.FC = () => {
   // --- STATE DEFINITIONS ---
   const [pageHistory, setPageHistory] = useState<Page[]>(['home']);
@@ -161,12 +155,9 @@ const AppContent: React.FC = () => {
 
   // --- PERUBAHAN STATE BERANDA ---
   const [heroCoins, setHeroCoins] = useState<CryptoData[]>([]);
-  const [topGainers, setTopGainers] = useState<CryptoData[]>([]);
-  const [topLosers, setTopLosers] = useState<CryptoData[]>([]);
-  const [topSideways, setTopSideways] = useState<CryptoData[]>([]);
+  const [trendingCoins, setTrendingCoins] = useState<CryptoData[]>([]);
   const [isMarketDataLoading, setIsMarketDataLoading] = useState(true);
   const [marketDataError, setMarketDataError] = useState<string | null>(null);
-  // State lama (trendingCoins, isTrendingLoading, trendingError, searchedCoin) dihapus
   // --- AKHIR PERUBAHAN STATE BERANDA ---
 
   const [rooms, setRooms] = useState<Room[]>([
@@ -309,44 +300,32 @@ const AppContent: React.FC = () => {
   const fetchHomepageData = useCallback(async (showSkeleton = true) => {
     if (showSkeleton) { setIsMarketDataLoading(true); setMarketDataError(null); }
     try {
-      // 1. Ambil 3 Koin Hero dan 1000 Koin Pasar secara bersamaan
-      const [heroData, marketData] = await Promise.all([
+      // 1. Ambil 3 Koin Hero dan 7 Koin Trending secara bersamaan
+      const [heroData, trendingData] = await Promise.all([
         fetchHeroCoins(),
-        fetchMarketMoversData()
+        fetchTrendingCoins()
       ]);
       
       setHeroCoins(heroData);
-
-      // 2. Saring 1000 koin (buang koin hero)
-      const filteredMarket = marketData.filter(coin => !HERO_COIN_IDS.includes(coin.id));
-
-      // 3. Urutkan untuk Top 10 Gainers
-      const gainers = [...filteredMarket].sort((a, b) => (b.change || -Infinity) - (a.change || -Infinity));
-      setTopGainers(gainers.slice(0, 10));
-
-      // 4. Urutkan untuk Top 10 Losers
-      const losers = [...filteredMarket].sort((a, b) => (a.change || Infinity) - (b.change || Infinity));
-      setTopLosers(losers.slice(0, 10));
-
-      // 5. Urutkan untuk Top 10 Sideways (paling dekat dengan 0)
-      const sideways = [...filteredMarket].sort((a, b) => Math.abs(a.change || 0) - Math.abs(b.change || 0));
-      setTopSideways(sideways.slice(0, 10));
+      setTrendingCoins(trendingData);
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Gagal memuat data pasar.';
-      if (showSkeleton) setMarketDataError(errorMessage);
-      else console.error('Gagal menyegarkan data pasar:', errorMessage);
+      // Tangkap error "Failed to fetch"
+      if (err instanceof Error && err.message.toLowerCase().includes('failed to fetch')) {
+        setMarketDataError('Gagal mengambil data dari server. Coba lagi nanti.');
+      } else {
+        setMarketDataError(errorMessage);
+      }
+      
+      if (!showSkeleton) {
+         console.error('Gagal menyegarkan data pasar:', errorMessage);
+      }
     } finally {
       if (showSkeleton) setIsMarketDataLoading(false);
     }
   }, []);
   // --- AKHIR PERUBAHAN FUNGSI DATA BERANDA ---
-
-  const handleResetToTrending = useCallback(() => {
-    // Fungsi ini tidak lagi relevan karena tidak ada "searched coin"
-    // Tapi kita bisa gunakan untuk refresh manual jika tombolnya ada
-    fetchHomepageData(true);
-  }, [fetchHomepageData]);
 
   const handleReloadPage = useCallback(() => {
     console.log("Reload page requested by user.");
@@ -487,7 +466,7 @@ const AppContent: React.FC = () => {
     
     if (page === 'home') {
       if (currentPage === 'home') {
-        // handleResetToTrending(); // Dihapus karena 'searchedCoin' dihapus
+        // Tidak ada lagi 'searchedCoin', jadi tidak perlu reset
       } else {
         setPageHistory(prev => [...prev, 'home']);
       }
@@ -502,13 +481,9 @@ const AppContent: React.FC = () => {
     }
   }, [pageHistory, currentRoom, leaveCurrentRoom]);
 
-  // --- handleSelectCoin dihapus ---
-
   const handleAndroidBackButton = useCallback(() => {
     const currentPage = pageHistory[pageHistory.length - 1];
     console.log(`[Back Button] handleAndroidBackButton. History:`, pageHistory);
-
-    // --- Logika searchedCoin dihapus ---
 
     if (pageHistory.length > 1) {
       if (currentPage === 'forum') {
@@ -665,9 +640,9 @@ const AppContent: React.FC = () => {
     
     const roomData = {
       name: trimmedName,
-      userCount: 0, // Diubah ke 0, akan di-handle oleh handleJoinRoom
+      userCount: 0, 
       createdBy: currentUser.username, 
-      createdById: firebaseUser.uid, // Ditambahkan untuk cek kepemilikan
+      createdById: firebaseUser.uid, 
       createdAt: Date.now(),
       isDefaultRoom: false
     };
@@ -685,7 +660,6 @@ const AppContent: React.FC = () => {
       set(roomRef, roomData)
       .then(() => {
         console.log('Room berhasil dibuat:', newRoom);
-        // setHasJoinedRoom sudah diurus oleh handleJoinRoom
         handleJoinRoom(newRoom);
       })
       .catch((error) => {
@@ -727,7 +701,7 @@ const AppContent: React.FC = () => {
 
     try {
       const isAdmin = ADMIN_USERNAMES.map(name => name.toLowerCase()).includes(currentUser.username.toLowerCase());
-      const isCreator = roomToDelete.createdById === firebaseUser.uid; // Cek kepemilikan via UID
+      const isCreator = roomToDelete.createdById === firebaseUser.uid; 
 
       if (!isAdmin && !isCreator) {
         alert('Hanya admin atau pembuat room yang dapat menghapus room ini.');
@@ -754,7 +728,7 @@ const AppContent: React.FC = () => {
             });
             if (currentRoom?.id === roomId) {
               leaveCurrentRoom();
-              setPageHistory(prev => prev.slice(0, -1)); // Kembali
+              setPageHistory(prev => prev.slice(0, -1)); 
             }
             
           })
@@ -1105,13 +1079,11 @@ const AppContent: React.FC = () => {
         });
         setRoomUserCounts(userCounts);
         
-        // --- PERUBAHAN DI SINI ---
         const defaultRooms = [ 
           { id: 'berita-kripto', name: 'Berita Kripto', userCount: 0, isDefaultRoom: true }, 
           { id: 'pengumuman-aturan', name: 'Pengumuman & Aturan', userCount: 0, isDefaultRoom: true },
           { id: 'tanya-atmin', name: 'Tanya #atmin', userCount: 0, isDefaultRoom: true }
         ];
-        // --- AKHIR PERUBAHAN ---
 
         const combinedRooms = [...defaultRooms, ...roomsArray.filter(r => !DEFAULT_ROOM_IDS.includes(r.id))];
         setRooms(combinedRooms);
@@ -1277,16 +1249,17 @@ const AppContent: React.FC = () => {
   
   // --- PERUBAHAN MEMOIZED VALUE ---
   const hotCoinForHeader = useMemo(() => {
-    if (topGainers.length > 0) {
+    // Ambil koin trending pertama (jika ada) sebagai "hot coin"
+    if (trendingCoins.length > 0) {
       return { 
-        name: topGainers[0].name, 
-        logo: topGainers[0].image, 
-        price: topGainers[0].price, 
-        change: topGainers[0].change 
+        name: trendingCoins[0].name, 
+        logo: trendingCoins[0].image, 
+        price: trendingCoins[0].price, 
+        change: trendingCoins[0].change 
       };
     }
     return null;
-  }, [topGainers]);
+  }, [trendingCoins]);
   // --- AKHIR PERUBAHAN MEMOIZED VALUE ---
 
   const currentTypingUsers = useMemo(() => {
@@ -1320,9 +1293,7 @@ const AppContent: React.FC = () => {
                   coinListError={coinListError} 
                   // --- PERUBAHAN PROPS ---
                   heroCoins={heroCoins}
-                  topGainers={topGainers}
-                  topLosers={topLosers}
-                  topSideways={topSideways}
+                  trendingCoins={trendingCoins}
                   isMarketDataLoading={isMarketDataLoading}
                   marketDataError={marketDataError}
                   onReloadMarketData={fetchHomepageData}

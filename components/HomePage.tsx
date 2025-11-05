@@ -3,29 +3,39 @@ import React, { useState, useCallback, useRef, lazy, Suspense, useEffect } from 
 import { fetchCryptoAnalysis } from '../services/geminiService';
 import CryptoCard from './CryptoCard';
 import type { HomePageProps, CryptoData, AnalysisResult, ExchangeTicker, CoinListItem } from '../types';
-// --- PERUBAHAN DI SINI ---
-// HeroCoin dihapus.
-// import HeroCoin from './HeroCoin';
+import HeroCoin from './HeroCoin';
 import DominanceTicker from './DominanceTicker';
 import {
   fetchMarketDominance,
   fetchExchangeTickers,
   fetchCoinDetails, // Diimpor untuk logika pencarian
 } from '../services/mockData';
-// --- AKHIR PERUBAHAN ---
 
 const AnalysisModal = lazy(() => import('./AnalysisModal'));
 
-// --- PERUBAHAN DI SINI ---
-// SkeletonHero dihapus karena layoutnya berubah
-
-// Skeleton untuk 3 koin hero
-const SkeletonHeroCards = () => (
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-    <SkeletonCard />
-    <SkeletonCard />
-    <SkeletonCard />
-  </div>
+// --- Skeleton untuk Hero Slider BARU ---
+const SkeletonHeroSlider = () => (
+    <div className="bg-gray-900 border border-white/10 rounded-xl p-4 w-full relative overflow-hidden">
+        <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+                <div className="flex items-center mb-3">
+                    <div className="h-10 w-10 bg-gray-700 rounded-full mr-3"></div>
+                    <div className="flex-1 space-y-1.5">
+                        <div className="h-5 w-3/4 bg-gray-700 rounded"></div>
+                        <div className="h-3 w-1/4 bg-gray-700 rounded"></div>
+                    </div>
+                </div>
+                <div className="h-8 w-1/2 bg-gray-700 rounded my-1.5"></div>
+                <div className="h-16 w-full bg-gray-700 rounded mt-3"></div>
+            </div>
+            <div className="w-full md:w-1/3 space-y-3">
+                <div className="h-7 w-full bg-gray-700 rounded"></div>
+                <div className="h-7 w-full bg-gray-700 rounded"></div>
+                <div className="h-10 w-full bg-gray-700 rounded mt-3"></div>
+            </div>
+        </div>
+        <div className="absolute top-0 left-0 w-full h-full skeleton-shimmer"></div>
+    </div>
 );
 
 // Skeleton untuk baris slider
@@ -34,7 +44,6 @@ const SkeletonCardRow = () => (
     {Array.from({ length: 5 }).map((_, index) => <SkeletonCard key={index} />)}
   </div>
 );
-// --- AKHIR PERUBAHAN ---
 
 const SkeletonCard = () => (
   <div className="bg-gray-900 border border-white/10 rounded-xl p-3 h-full w-48 flex-shrink-0 relative overflow-hidden">
@@ -51,19 +60,101 @@ const SkeletonCard = () => (
   </div>
 );
 
+// --- KOMPONEN BARU: HERO SLIDER ---
+const HeroSlider: React.FC<{
+  coins: CryptoData[];
+  onAnalyze: (crypto: CryptoData) => void;
+  idrRate: number | null;
+  currency: Currency;
+}> = ({ coins, onAnalyze, idrRate, currency }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const resetTimeout = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+  };
+
+  useEffect(() => {
+    resetTimeout();
+    timeoutRef.current = setTimeout(
+      () => setActiveIndex((prevIndex) => (prevIndex === coins.length - 1 ? 0 : prevIndex + 1)),
+      5000 // Ganti slide setiap 5 detik
+    );
+    return () => resetTimeout();
+  }, [activeIndex, coins.length]);
+
+  const setSlide = (index: number) => {
+    resetTimeout();
+    setActiveIndex(index);
+  };
+
+  const nextSlide = () => setSlide(activeIndex === coins.length - 1 ? 0 : activeIndex + 1);
+  const prevSlide = () => setSlide(activeIndex === 0 ? coins.length - 1 : activeIndex - 1);
+
+  if (!coins || coins.length === 0) {
+    return <SkeletonHeroSlider />;
+  }
+
+  return (
+    <div className="relative w-full">
+      <div className="overflow-hidden relative">
+        <div
+          className="whitespace-nowrap transition-transform duration-500 ease-in-out"
+          style={{ transform: `translateX(-${activeIndex * 100}%)` }}
+        >
+          {coins.map((coin) => (
+            <div className="inline-block w-full whitespace-normal" key={coin.id}>
+              <HeroCoin crypto={coin} onAnalyze={onAnalyze} idrRate={idrRate} currency={currency} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Kontrol Manual */}
+      <button
+        onClick={prevSlide}
+        className="absolute top-1/2 left-0 -translate-y-1/2 bg-black/20 hover:bg-white/20 text-white p-2 rounded-full transition-colors z-10"
+        aria-label="Previous Slide"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+      </button>
+      <button
+        onClick={nextSlide}
+        className="absolute top-1/2 right-0 -translate-y-1/2 bg-black/20 hover:bg-white/20 text-white p-2 rounded-full transition-colors z-10"
+        aria-label="Next Slide"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+      </button>
+
+      {/* Indikator Titik */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2 z-10">
+        {coins.map((_, index) => (
+          <button
+            key={index}
+            onClick={() => setSlide(index)}
+            className={`w-2 h-2 rounded-full transition-all duration-300 ${
+              activeIndex === index ? 'bg-electric p-1' : 'bg-white/40 hover:bg-white/70'
+            }`}
+            aria-label={`Go to slide ${index + 1}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+// --- AKHIR KOMPONEN HERO SLIDER ---
+
 const HomePage: React.FC<HomePageProps> = ({ 
     idrRate, isRateLoading, currency, onIncrementAnalysisCount, 
     fullCoinList, isCoinListLoading, coinListError,
     // --- PROPS BARU ---
     heroCoins,
-    topGainers,
-    topLosers,
-    topSideways,
+    trendingCoins,
     isMarketDataLoading,
     marketDataError,
     onReloadMarketData
-    // --- PROPS LAMA DIHAPUS ---
-    // heroCoin, otherTrendingCoins, isTrendingLoading, trendingError, onSelectCoin, onReloadTrending
 }) => {
   const [marketDominance, setMarketDominance] = useState<MarketDominance | null>(null);
   const [isDominanceLoading, setIsDominanceLoading] = useState(true);
@@ -81,7 +172,6 @@ const HomePage: React.FC<HomePageProps> = ({
   const [filteredCoinList, setFilteredCoinList] = useState<CoinListItem[]>([]);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   
-  // State baru untuk loading pencarian
   const [isSearchLoading, setIsSearchLoading] = useState(false);
 
   const fetchDominanceData = useCallback(async () => {
@@ -120,7 +210,6 @@ const HomePage: React.FC<HomePageProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // --- LOGIKA PENCARIAN DIPERBARUI ---
   const handleAnalyze = useCallback(async (crypto: CryptoData) => {
     onIncrementAnalysisCount(crypto.id);
     setSelectedCrypto(crypto); setIsModalOpen(true);
@@ -137,23 +226,22 @@ const HomePage: React.FC<HomePageProps> = ({
       .catch(err => setTickersError(err.message))
       .finally(() => setIsTickersLoading(false));
   }, [onIncrementAnalysisCount]);
-
+  
   const handleSearchSelect = useCallback(async (coinId: string) => {
     setSearchQuery('');
     setFilteredCoinList([]);
     setIsSearchLoading(true);
     
     try {
+      // onSelectCoin(coinId) diganti dengan fetch + analyze
       const coinData = await fetchCoinDetails(coinId);
       handleAnalyze(coinData);
     } catch (err) {
       console.error("Gagal mengambil detail koin dari pencarian:", err);
-      // Mungkin tampilkan notifikasi error kecil nanti
     } finally {
       setIsSearchLoading(false);
     }
-  }, [handleAnalyze]);
-  // --- AKHIR LOGIKA PENCARIAN DIPERBARUI ---
+  }, [handleAnalyze]); // onSelectCoin dihapus dari dependensi
 
   const closeModal = () => { setIsModalOpen(false); setSelectedCrypto(null); };
   
@@ -162,12 +250,8 @@ const HomePage: React.FC<HomePageProps> = ({
     if (isMarketDataLoading) {
       return (
         <>
-          <SkeletonHeroCards />
-          <div className="mt-4 space-y-4">
-            <h3 className="text-base font-bold text-gray-700 bg-gray-700/50 rounded w-1/3 h-5 animate-pulse"></h3>
-            <SkeletonCardRow />
-            <h3 className="text-base font-bold text-gray-700 bg-gray-700/50 rounded w-1/3 h-5 animate-pulse"></h3>
-            <SkeletonCardRow />
+          <SkeletonHeroSlider />
+          <div className="mt-4">
             <h3 className="text-base font-bold text-gray-700 bg-gray-700/50 rounded w-1/3 h-5 animate-pulse"></h3>
             <SkeletonCardRow />
           </div>
@@ -187,44 +271,20 @@ const HomePage: React.FC<HomePageProps> = ({
     return (
       <div className="animate-fade-in-content space-y-4">
         
-        {/* 1. Tiga Koin Hero */}
-        {heroCoins.length > 0 && (
-          <div>
-            <h3 className="text-base font-bold text-gray-300 mb-2">Koin Utama</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {heroCoins.map(crypto => (
-                <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />
-              ))}
-            </div>
-          </div>
-        )}
+        {/* 1. Slider 3 Koin Hero */}
+        <HeroSlider 
+          coins={heroCoins} 
+          onAnalyze={handleAnalyze} 
+          idrRate={idrRate} 
+          currency={currency} 
+        />
 
-        {/* 2. Top 10 Kenaikan */}
-        {topGainers.length > 0 && (
-          <div>
-             <h3 className="text-base font-bold text-gray-300 mb-2">Top 10 Kenaikan</h3>
+        {/* 2. Top 7 Koin Trending */}
+        {trendingCoins.length > 0 && (
+          <div className="mt-4">
+             <h3 className="text-base font-bold text-gray-300 mb-2">Peluang Pasar Lainnya (Top 7 Trending)</h3>
              <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar">
-                {topGainers.map(crypto => <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />)}
-             </div>
-          </div>
-        )}
-        
-        {/* 3. Top 10 Sideways */}
-        {topSideways.length > 0 && (
-          <div>
-             <h3 className="text-base font-bold text-gray-300 mb-2">Top 10 Sideways</h3>
-             <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar">
-                {topSideways.map(crypto => <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />)}
-             </div>
-          </div>
-        )}
-        
-        {/* 4. Top 10 Penurunan */}
-        {topLosers.length > 0 && (
-          <div>
-             <h3 className="text-base font-bold text-gray-300 mb-2">Top 10 Penurunan</h3>
-             <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar">
-                {topLosers.map(crypto => <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />)}
+                {trendingCoins.map(crypto => <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />)}
              </div>
           </div>
         )}

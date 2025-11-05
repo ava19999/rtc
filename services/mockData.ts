@@ -34,30 +34,19 @@ export const fetchHeroCoins = async (): Promise<CryptoData[]> => {
     return coinsData.map(mapCoinGeckoToCryptoData);
 };
 
-// FUNGSI LAMA DIHAPUS: fetchTrendingCoins (tidak dipakai lagi)
-// export const fetchTrendingCoins = async (): Promise<CryptoData[]> => { ... }
+// FUNGSI LAMA (DIKEMBALIKAN): Mengambil Top 7 Trending Global
+export const fetchTrendingCoins = async (): Promise<CryptoData[]> => {
+    const trendingUrl = `${COINGECKO_API_BASE_URL}/search/trending`;
+    const trendingData = await apiRequest(trendingUrl, CACHE_DURATION.DEFAULT);
+    // Ambil semua 7 ID koin
+    const trendingIds = trendingData.coins.map((c: any) => c.item.id).slice(0, 7).join(',');
 
-// FUNGSI BARU: Mengambil 1000 koin teratas dengan data lengkap untuk disaring
-export const fetchMarketMoversData = async (): Promise<CryptoData[]> => {
-    const commonParams = "vs_currency=usd&order=market_cap_desc&per_page=250&sparkline=true&price_change_percentage=24h";
-    
-    const url1 = `${COINGECKO_API_BASE_URL}/coins/markets?${commonParams}&page=1`;
-    const url2 = `${COINGECKO_API_BASE_URL}/coins/markets?${commonParams}&page=2`;
-    const url3 = `${COINGECKO_API_BASE_URL}/coins/markets?${commonParams}&page=3`;
-    const url4 = `${COINGECKO_API_BASE_URL}/coins/markets?${commonParams}&page=4`;
+    if (!trendingIds) return [];
 
-    // Ambil 4 halaman sekaligus (1000 koin)
-    const [coinsData1, coinsData2, coinsData3, coinsData4] = await Promise.all([
-        apiRequest(url1, CACHE_DURATION.LONG),
-        apiRequest(url2, CACHE_DURATION.LONG),
-        apiRequest(url3, CACHE_DURATION.LONG),
-        apiRequest(url4, CACHE_DURATION.LONG)
-    ]);
-    
-    const fullList = [...coinsData1, ...coinsData2, ...coinsData3, ...coinsData4];
-    
-    // Pastikan kita memetakan ke tipe CryptoData lengkap
-    return fullList.map(mapCoinGeckoToCryptoData);
+    // Ambil data pasar lengkap untuk 7 koin tersebut
+    const coinsUrl = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&ids=${trendingIds}&order=market_cap_desc&per_page=7&page=1&sparkline=true&price_change_percentage=24h`;
+    const coinsData = await apiRequest(coinsUrl, CACHE_DURATION.DEFAULT);
+    return coinsData.map(mapCoinGeckoToCryptoData);
 };
 
 // FUNGSI DIMODIFIKASI: fetchTop500Coins sekarang HANYA mengambil data ringan untuk pencarian

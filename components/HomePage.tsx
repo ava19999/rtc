@@ -1,10 +1,9 @@
-// ava19999/rtc/rtc-09b2646bbe674aaaa08c62f5338b30469b9e2c8d/components/HomePage.tsx
+// HomePage.tsx
 import React, { useState, useCallback, useRef, lazy, Suspense, useEffect } from 'react';
 import { fetchCryptoAnalysis } from '../services/geminiService';
 import CryptoCard from './CryptoCard';
-// --- PERUBAHAN: Impor Currency ---
-import type { HomePageProps, MarketDominance, CryptoData, AnalysisResult, ExchangeTicker, CoinListItem, Currency } from '../types';
-import HeroCoin from './HeroCoin'; // Kita masih perlu ini untuk carousel
+import type { HomePageProps, MarketDominance, CryptoData, AnalysisResult, ExchangeTicker, CoinListItem } from '../types';
+import HeroCoin from './HeroCoin';
 import DominanceTicker from './DominanceTicker';
 import {
   fetchMarketDominance,
@@ -52,132 +51,10 @@ const SkeletonCard = () => (
   </div>
 );
 
-
-// --- KOMPONEN BARU: HERO COIN CAROUSEL ---
-const HeroCoinCarousel: React.FC<{
-  coins: CryptoData[];
-  onAnalyze: (crypto: CryptoData) => void;
-  idrRate: number | null;
-  currency: Currency;
-}> = ({ coins, onAnalyze, idrRate, currency }) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Fungsi untuk memulai auto-scroll
-  const startAutoScroll = useCallback(() => {
-    // Hentikan dulu jika sudah ada
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-    
-    intervalRef.current = setInterval(() => {
-      if (scrollRef.current) {
-        const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
-        // Tentukan lebar item. Asumsikan semua item sama lebar (lebar container)
-        // Cek dulu apakah coins.length valid
-        if (coins.length === 0) return;
-        
-        const itemWidth = scrollWidth / coins.length;
-        let nextScrollLeft = scrollLeft + itemWidth;
-
-        // Jika scroll berikutnya melebihi batas (dengan toleransi kecil), kembali ke awal
-        if (nextScrollLeft + clientWidth > scrollWidth - itemWidth / 2) {
-          nextScrollLeft = 0;
-        }
-        
-        scrollRef.current.scrollTo({ left: nextScrollLeft, behavior: 'smooth' });
-      }
-    }, 5000); // Ganti setiap 5 detik
-  }, [coins.length]);
-
-  // Fungsi untuk menghentikan auto-scroll
-  const stopAutoScroll = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  };
-
-  // Mulai auto-scroll saat komponen dimuat
-  useEffect(() => {
-    startAutoScroll();
-    // Hentikan interval saat komponen di-unmount
-    return () => stopAutoScroll();
-  }, [startAutoScroll]);
-
-  // Handle interaksi manual (mousedown dan touchstart)
-  // Dikelola via useEffect untuk cleanup yang lebih baik
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    let interactionTimeout: NodeJS.Timeout | null = null;
-
-    const handleManualInteraction = () => {
-      stopAutoScroll(); // Hentikan auto-scroll
-      
-      // Hapus timeout sebelumnya jika ada
-      if (interactionTimeout) {
-        clearTimeout(interactionTimeout);
-      }
-      
-      // Mulai lagi auto-scroll setelah 10 detik tidak aktif
-      interactionTimeout = setTimeout(() => {
-        startAutoScroll();
-      }, 10000); 
-    };
-
-    el.addEventListener('mousedown', handleManualInteraction);
-    el.addEventListener('touchstart', handleManualInteraction, { passive: true });
-    
-    return () => {
-      el.removeEventListener('mousedown', handleManualInteraction);
-      el.removeEventListener('touchstart', handleManualInteraction);
-      if (interactionTimeout) {
-        clearTimeout(interactionTimeout); // Bersihkan timeout saat unmount
-      }
-    };
-  }, [startAutoScroll]); // Dependensi ke startAutoScroll
-
-  return (
-    <div className="relative w-full">
-      <div 
-        ref={scrollRef} 
-        className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth custom-scrollbar"
-        style={{ scrollbarWidth: 'none' }} // Sembunyikan scrollbar di Firefox
-      >
-        {coins.map((coin) => (
-          <div key={coin.id} className="flex-shrink-0 w-full snap-center">
-            {/* Menggunakan kembali komponen HeroCoin untuk setiap item */}
-            <HeroCoin crypto={coin} onAnalyze={onAnalyze} idrRate={idrRate} currency={currency} />
-          </div>
-        ))}
-      </div>
-      {/* Indikator Dots */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex space-x-1.5 z-10">
-        {coins.map((coin) => (
-          <div key={`${coin.id}-dot`} className="w-1.5 h-1.5 bg-white/30 rounded-full" />
-        ))}
-      </div>
-    </div>
-  );
-};
-// --- AKHIR KOMPONEN BARU ---
-
-
 const HomePage: React.FC<HomePageProps> = ({ 
     idrRate, isRateLoading, currency, onIncrementAnalysisCount, 
     fullCoinList, isCoinListLoading, coinListError,
-    // --- PROPS BARU DITERIMA ---
-    heroCoin, // Ini adalah trending[0]
-    otherTrendingCoins, 
-    isTrendingLoading, 
-    trendingError, 
-    staticHeroCoins, // Ini adalah [BTC, ETH, SOL]
-    isStaticHeroLoading,
-    staticHeroError,
-    // --- AKHIR PROPS BARU ---
-    onSelectCoin, onReloadTrending
+    heroCoin, otherTrendingCoins, isTrendingLoading, trendingError, onSelectCoin, onReloadTrending
 }) => {
   const [marketDominance, setMarketDominance] = useState<MarketDominance | null>(null);
   const [isDominanceLoading, setIsDominanceLoading] = useState(true);
@@ -257,8 +134,7 @@ const HomePage: React.FC<HomePageProps> = ({
   const closeModal = () => { setIsModalOpen(false); setSelectedCrypto(null); };
   
   const renderContent = () => {
-    // --- PERUBAHAN: Cek kedua loading state ---
-    if (isTrendingLoading || isStaticHeroLoading) {
+    if (isTrendingLoading) {
       return (
         <>
           <SkeletonHero />
@@ -268,41 +144,23 @@ const HomePage: React.FC<HomePageProps> = ({
         </>
       );
     }
-    
-    // --- PERUBAHAN: Cek kedua error state ---
-    const combinedError = trendingError || staticHeroError;
-    if (combinedError) {
+    if (trendingError) {
       return (
         <div className="flex flex-col items-center justify-center h-48 text-center">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-magenta mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <p className="text-base font-semibold text-red-400">Tidak Dapat Memuat Data</p>
-            {/* Tampilkan pesan error gabungan */}
-            <p className="text-gray-400 mt-1.5 mb-3 max-w-md text-sm">{combinedError}</p>
+            <p className="text-gray-400 mt-1.5 mb-3 max-w-md text-sm">{trendingError}</p>
             <button onClick={onReloadTrending} className="bg-electric/80 hover:bg-electric text-white font-semibold py-1.5 px-4 rounded-lg transition-all duration-300 text-sm">Coba Lagi</button>
         </div>
       );
     }
-
     return (
       <div className="animate-fade-in-content">
-        {/* --- PERUBAHAN: Gunakan Carousel baru --- */}
-        {staticHeroCoins.length > 0 && (
-          <HeroCoinCarousel 
-            coins={staticHeroCoins} 
-            onAnalyze={handleAnalyze} 
-            idrRate={idrRate} 
-            currency={currency} 
-          />
-        )}
-        
-        {/* --- PERUBAHAN: Tampilkan SEMUA trending coins di "Peluang Pasar Lainnya" --- */}
-        {(heroCoin || otherTrendingCoins.length > 0) && (
+        {heroCoin && <HeroCoin crypto={heroCoin} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />}
+        {otherTrendingCoins.length > 0 && (
           <div className="mt-4">
              <h3 className="text-base font-bold text-gray-300 mb-2">Peluang Pasar Lainnya</h3>
              <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar">
-                {/* Tampilkan heroCoin (trending[0]) sebagai card pertama */}
-                {heroCoin && <CryptoCard key={heroCoin.id} crypto={heroCoin} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />}
-                {/* Tampilkan sisanya */}
                 {otherTrendingCoins.map(crypto => <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />)}
              </div>
           </div>
@@ -361,14 +219,6 @@ const HomePage: React.FC<HomePageProps> = ({
             .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
             .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 2px; }
             .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0, 191, 255, 0.5); }
-            /* Sembunyikan scrollbar untuk carousel */
-            .custom-scrollbar {
-              -ms-overflow-style: none;  /* IE and Edge */
-              scrollbar-width: none;  /* Firefox */
-            }
-            .custom-scrollbar::-webkit-scrollbar {
-              display: none; /* Chrome, Safari, Opera */
-            }
         `}</style>
     </div>
   );

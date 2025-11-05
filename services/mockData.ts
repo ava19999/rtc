@@ -1,4 +1,3 @@
-// ava19999/rtc/rtc-09b2646bbe674aaaa08c62f5338b30469b9e2c8d/services/mockData.ts
 import { COINGECKO_API_BASE_URL, NEWS_API_URL, MAJOR_EXCHANGES } from '../constants';
 // Fix: Imported CACHE_DURATION to resolve reference errors.
 import { apiRequest, CACHE_DURATION } from './apiService';
@@ -69,28 +68,6 @@ export const fetchCoinDetails = async (coinId: string): Promise<CryptoData> => {
     if (!coinsData || coinsData.length === 0) throw new Error("Koin tidak ditemukan");
     return mapCoinGeckoToCryptoData(coinsData[0]);
 };
-
-// --- TAMBAHAN FUNGSI BARU ---
-export const fetchSpecificCoins = async (coinIds: string[]): Promise<CryptoData[]> => {
-    if (!coinIds || coinIds.length === 0) return [];
-    
-    const idsString = coinIds.join(',');
-    // Ambil data pasar untuk koin-koin spesifik
-    const url = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&ids=${idsString}&order=market_cap_desc&per_page=10&page=1&sparkline=true&price_change_percentage=24h`;
-    
-    // Gunakan cache durasi pendek agar harga tetap update
-    const coinsData = await apiRequest(url, CACHE_DURATION.SHORT); 
-    
-    if (!coinsData || !Array.isArray(coinsData)) {
-        throw new Error("Gagal mengambil data koin spesifik.");
-    }
-    
-    // Urutkan berdasarkan urutan coinIds asli
-    const sortedCoins = coinsData.sort((a, b) => coinIds.indexOf(a.id) - coinIds.indexOf(b.id));
-    
-    return sortedCoins.map(mapCoinGeckoToCryptoData);
-};
-// --- AKHIR TAMBAHAN ---
 
 export const fetchExchangeTickers = async (coinId: string): Promise<ExchangeTicker[]> => {
     const url = `${COINGECKO_API_BASE_URL}/coins/${coinId}/tickers?include_exchange_logo=true`;

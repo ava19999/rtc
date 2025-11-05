@@ -1,4 +1,4 @@
-// types.ts
+// ava19999/rtc/rtc-09b2646bbe674aaaa08c62f5338b30469b9e2c8d/types.ts
 import type { CredentialResponse } from '@react-oauth/google';
 
 // --- Basic Types ---
@@ -163,10 +163,19 @@ export interface HomePageProps {
   fullCoinList: CoinListItem[];
   isCoinListLoading: boolean;
   coinListError: string | null;
-  heroCoin: CryptoData | null;
+
+  // --- PERUBAHAN DI SINI ---
+  heroCoin: CryptoData | null; // Ini adalah trending[0]
   otherTrendingCoins: CryptoData[];
   isTrendingLoading: boolean;
   trendingError: string | null;
+
+  // --- TAMBAHAN UNTUK CAROUSEL BARU ---
+  staticHeroCoins: CryptoData[]; // Ini adalah [BTC, ETH, SOL]
+  isStaticHeroLoading: boolean;
+  staticHeroError: string | null;
+  // --- AKHIR TAMBAHAN ---
+
   onSelectCoin: (coinId: string) => void;
   onReloadTrending: () => void;
 }
@@ -341,6 +350,13 @@ export interface AppState {
   isTrendingLoading: boolean;
   trendingError: string | null;
   searchedCoin: CryptoData | null;
+
+  // --- TAMBAHAN UNTUK CAROUSEL BARU ---
+  staticHeroCoins: CryptoData[];
+  isStaticHeroLoading: boolean;
+  staticHeroError: string | null;
+  // --- AKHIR TAMBAHAN ---
+
   rooms: Room[];
   currentRoom: Room | null;
   joinedRoomIds: Set<string>;

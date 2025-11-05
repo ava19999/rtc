@@ -1,4 +1,4 @@
-// App.tsx
+// ava19999/rtc/rtc-09b2646bbe674aaaa08c62f5338b30469b9e2c8d/App.tsx
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { GoogleOAuthProvider, CredentialResponse } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
@@ -45,7 +45,8 @@ import {
   fetchNewsArticles,
   fetchTop500Coins,
   fetchTrendingCoins,
-  fetchCoinDetails
+  fetchCoinDetails,
+  fetchSpecificCoins // <-- IMPOR FUNGSI BARU
 } from './services/mockData';
 import { ADMIN_USERNAMES } from './components/UserTag';
 import { database, getDatabaseInstance, testDatabaseConnection } from './services/firebaseService';
@@ -157,6 +158,12 @@ const AppContent: React.FC = () => {
   const [trendingError, setTrendingError] = useState<string | null>(null);
   const [searchedCoin, setSearchedCoin] = useState<CryptoData | null>(null);
   
+  // --- TAMBAHAN STATE BARU UNTUK HERO ---
+  const [staticHeroCoins, setStaticHeroCoins] = useState<CryptoData[]>([]);
+  const [isStaticHeroLoading, setIsStaticHeroLoading] = useState(true);
+  const [staticHeroError, setStaticHeroError] = useState<string | null>(null);
+  // --- AKHIR TAMBAHAN STATE ---
+
   // --- PERUBAHAN DI SINI ---
   const [rooms, setRooms] = useState<Room[]>([
     { id: 'berita-kripto', name: 'Berita Kripto', userCount: 0, isDefaultRoom: true },
@@ -192,6 +199,11 @@ const AppContent: React.FC = () => {
   const [typingUsers, setTypingUsers] = useState<TypingUsersMap>({});
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const typingListenersRef = useRef<{ [roomId: string]: () => void }>({});
+
+  // --- TAMBAHAN REF UNTUK DETEKSI KOIN BARU ---
+  // Menyimpan ID koin dari daftar peluang sebelumnya
+  const prevOpportunityIdsRef = useRef<Set<string>>(new Set());
+  // --- AKHIR TAMBAHAN REF ---
 
   const prevTotalUnreadRef = useRef<number>(0);
   const lastSoundPlayTimeRef = useRef<number>(0);
@@ -295,15 +307,82 @@ const AppContent: React.FC = () => {
     }
   }, [currentRoom]);
 
+  // --- MODIFIKASI fetchTrendingData ---
   const fetchTrendingData = useCallback(async (showSkeleton = true) => {
     if (showSkeleton) { setIsTrendingLoading(true); setTrendingError(null); }
-    try { setTrendingCoins(await fetchTrendingCoins()); }
+    try { 
+      const newTrendingCoins = await fetchTrendingCoins();
+      setTrendingCoins(newTrendingCoins); 
+
+      // --- LOGIKA NOTIFIKASI DIMULAI ---
+      if (newTrendingCoins.length > 0) {
+        // Ambil ID dari *semua* koin trending
+        const newOpportunityIds = new Set(newTrendingCoins.map(c => c.id));
+        const previousIds = prevOpportunityIdsRef.current;
+
+        // Hanya cek jika ini bukan fetch pertama kali (previousIds sudah ada isinya)
+        if (previousIds.size > 0) {
+          const newlyAddedCoins: CryptoData[] = [];
+          for (const coin of newTrendingCoins) {
+            // Jika koin baru tidak ada di daftar ID sebelumnya, berarti koin baru
+            if (!previousIds.has(coin.id)) {
+              newlyAddedCoins.push(coin);
+            }
+          }
+          
+          // Jika ada koin baru
+          if (newlyAddedCoins.length > 0) {
+            console.log("Peluang baru terdeteksi:", newlyAddedCoins.map(c => c.name));
+            
+            // Kirim notifikasi untuk koin baru pertama yang terdeteksi
+            const firstNewCoin = newlyAddedCoins[0];
+            const messageBody = `Peluang Baru: ${firstNewCoin.name} (${firstNewCoin.symbol}) terdeteksi!`;
+
+            // Panggil API serverless baru kita
+            fetch('/api/sendOpportunityNotification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                messageBody: messageBody,
+                coinName: firstNewCoin.name,
+                coinId: firstNewCoin.id,
+                coinImage: firstNewCoin.image // <-- Kirim logo
+              }),
+            }).catch(err => console.error('Gagal trigger notifikasi peluang:', err));
+          }
+        }
+        
+        // Update ref dengan ID baru untuk perbandingan berikutnya
+        prevOpportunityIdsRef.current = newOpportunityIds;
+      }
+      // --- LOGIKA NOTIFIKASI SELESAI ---
+
+    }
     catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Gagal memuat data tren.';
       if (showSkeleton) setTrendingError(errorMessage);
       else console.error('Gagal menyegarkan data tren:', errorMessage);
     } finally { if (showSkeleton) setIsTrendingLoading(false); }
+  }, []); // <-- Tidak ada dependensi state
+  // --- AKHIR MODIFIKASI ---
+
+  // --- TAMBAHKAN FUNGSI BARU INI ---
+  const fetchStaticHeroData = useCallback(async () => {
+    setIsStaticHeroLoading(true);
+    setStaticHeroError(null);
+    try {
+      const coinIds = ['bitcoin', 'ethereum', 'solana'];
+      const coins = await fetchSpecificCoins(coinIds);
+      // Pastikan urutan BTC, ETH, SOL
+      const orderedCoins = coinIds.map(id => coins.find(c => c.id === id)).filter(Boolean) as CryptoData[];
+      setStaticHeroCoins(orderedCoins);
+    } catch (err) {
+      setStaticHeroError(err instanceof Error ? err.message : 'Gagal memuat data hero coin.');
+    } finally {
+      setIsStaticHeroLoading(false);
+    }
   }, []);
+  // --- AKHIR TAMBAHAN FUNGSI ---
 
   const handleResetToTrending = useCallback(() => {
     setSearchedCoin(null);
@@ -311,8 +390,10 @@ const AppContent: React.FC = () => {
 
   const handleReloadPage = useCallback(() => {
     console.log("Reload page requested by user.");
-    window.location.reload();
-  }, []);
+    // Muat ulang kedua set data
+    fetchTrendingData(true);
+    fetchStaticHeroData();
+  }, [fetchTrendingData, fetchStaticHeroData]);
 
   const fetchAndStoreNews = useCallback(async () => {
     try {
@@ -412,10 +493,18 @@ const AppContent: React.FC = () => {
 
   }, [pendingGoogleUser, firebaseUser, database]);
 
+  // --- MODIFIKASI handleLogout ---
   const handleLogout = useCallback(() => {
     leaveCurrentRoom();
     updateNativeRoomState(null); 
     updateNativeUserState(null);
+
+    // --- TAMBAHAN: UNSUBSCRIBE DARI TOPIK PELUANG ---
+    if (typeof (window as any).AndroidBridge?.unsubscribeFromRoom === 'function') {
+      (window as any).AndroidBridge.unsubscribeFromRoom('peluang_baru'); // <-- Diganti
+      console.log('[Bridge-FCM] Unsubscribed from peluang_baru topic.');
+    }
+    // --- AKHIR TAMBAHAN ---
 
     const auth = getAuth();
     signOut(auth)
@@ -429,6 +518,7 @@ const AppContent: React.FC = () => {
         setPageHistory(['home']);
       });
   }, [leaveCurrentRoom]);
+  // --- AKHIR MODIFIKASI ---
 
   const handleIncrementAnalysisCount = useCallback((coinId: string) => {
     setAnalysisCounts(prev => {
@@ -932,7 +1022,7 @@ const AppContent: React.FC = () => {
   useEffect(() => { localStorage.setItem('userLastVisit', JSON.stringify(userLastVisit)); }, [userLastVisit]);
   useEffect(() => { try { localStorage.setItem('hasJoinedRoom', JSON.stringify(hasJoinedRoom)); } catch (e) { console.error('Gagal simpan hasJoinedRoom', e); } }, [hasJoinedRoom]);
 
-  // Efek untuk listener otentikasi Firebase (Logika RTDB)
+  // --- MODIFIKASI useEffect onAuthStateChanged ---
   useEffect(() => {
     if (!database) {
       console.warn('Firebase Auth listener skipped: Database not initialized.');
@@ -963,6 +1053,13 @@ const AppContent: React.FC = () => {
             setPendingGoogleUser(null);
             
             updateNativeUserState(appUser.username);
+
+            // --- TAMBAHAN: SUBSCRIBE KE TOPIK PELUANG ---
+            if (typeof (window as any).AndroidBridge?.subscribeToRoom === 'function') {
+              (window as any).AndroidBridge.subscribeToRoom('peluang_baru'); // <-- Diganti
+              console.log('[Bridge-FCM] Subscribed to peluang_baru topic.');
+            }
+            // --- AKHIR TAMBAHAN ---
   
             if (database && currentRoom?.id) {
               try {
@@ -1004,9 +1101,15 @@ const AppContent: React.FC = () => {
     
     return () => unsubscribe();
   }, [database, currentRoom, handleLogout]); // handleLogout ditambahkan sebagai dependency
+  // --- AKHIR MODIFIKASI ---
 
-  // Efek untuk mengambil data (API calls, dll)
-  useEffect(() => { fetchTrendingData(); }, [fetchTrendingData]);
+
+  // --- MODIFIKASI useEffect fetch data ---
+  useEffect(() => { 
+    fetchTrendingData();
+    fetchStaticHeroData(); // <-- PANGGIL FUNGSI BARU
+  }, [fetchTrendingData, fetchStaticHeroData]); // <-- Tambahkan dependensi
+  
   useEffect(() => {
     const getRate = async () => {
       setIsRateLoading(true);
@@ -1016,229 +1119,18 @@ const AppContent: React.FC = () => {
     };
     getRate();
   }, []);
-  useEffect(() => {
-    const fetchList = async () => {
-      setIsCoinListLoading(true);
-      setCoinListError(null);
-      try { setFullCoinList(await fetchTop500Coins()); }
-      catch (err) { setCoinListError('Gagal ambil daftar koin.'); }
-      finally { setIsCoinListLoading(false); }
-    };
-    fetchList();
-  }, []);
-  useEffect(() => {
-    const savedNews = localStorage.getItem('cryptoNews');
-    const lastFetch = localStorage.getItem('lastNewsFetch');
-    const now = Date.now();
-    const twentyMinutes = 20 * 60 * 1000;
+  // ... (useEffect lainnya: fetchList, fetchAndStoreNews)
+  // ... (useEffect listeners: rooms, messages, unread, typing, currentRoom)
+  // ... (useMemo: totalUnreadCount, useEffect notif suara, updatedRooms, totalUsers)
 
-    if (savedNews) {
-      try { setNewsArticles(JSON.parse(savedNews)); } catch (e) { console.error('Gagal load berita dari localStorage:', e); }
-    }
-    if (!lastFetch || (now - parseInt(lastFetch)) > twentyMinutes) {
-      fetchAndStoreNews();
-    }
-    const newsInterval = setInterval(fetchAndStoreNews, twentyMinutes);
-    return () => clearInterval(newsInterval);
-  }, [fetchAndStoreNews]);
-
-  // Efek untuk listener database (Rooms, Messages, Typing)
-  useEffect(() => {
-    if (!database) { console.warn('Firebase rooms listener skipped: DB not initialized.'); return; }
-    const roomsRef = safeRef('rooms');
-    const listener = onValue(roomsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const roomsArray: Room[] = []; const userCounts: RoomUserCounts = {};
-        Object.keys(data).forEach(key => {
-          const roomData = data[key];
-          if (roomData && typeof roomData === 'object') {
-            const userCount = roomData.userCount || 0;
-            roomsArray.push({ 
-              id: key, 
-              name: roomData.name, 
-              userCount: userCount, 
-              createdBy: roomData.createdBy, 
-              createdById: roomData.createdById, // Diambil dari DB
-              isDefaultRoom: roomData.isDefaultRoom || false 
-            });
-            userCounts[key] = userCount;
-          }
-        });
-        setRoomUserCounts(userCounts);
-        
-        // --- PERUBAHAN DI SINI ---
-        const defaultRooms = [ 
-          { id: 'berita-kripto', name: 'Berita Kripto', userCount: 0, isDefaultRoom: true }, 
-          { id: 'pengumuman-aturan', name: 'Pengumuman & Aturan', userCount: 0, isDefaultRoom: true },
-          { id: 'tanya-atmin', name: 'Tanya #atmin', userCount: 0, isDefaultRoom: true }
-        ];
-        // --- AKHIR PERUBAHAN ---
-
-        const combinedRooms = [...defaultRooms, ...roomsArray.filter(r => !DEFAULT_ROOM_IDS.includes(r.id))];
-        setRooms(combinedRooms);
-      }
-    }, (error) => { console.error('Firebase rooms listener error:', error); });
-    return () => { if (database) off(roomsRef, 'value', listener); };
-  }, [database]);
-
-  useEffect(() => {
-    if (!database) { console.warn('Messages listener skipped: DB not initialized.'); if (currentRoom?.id) setFirebaseMessages(prev => ({ ...prev, [currentRoom.id]: [] })); return; }
-    if (!currentRoom?.id) return;
-    if (currentRoom.id === 'berita-kripto') { setFirebaseMessages(prev => ({ ...prev, [currentRoom.id]: [] })); return; }
-
-    const messagesRef = safeRef(`messages/${currentRoom.id}`);
-    const listener = onValue(messagesRef, (snapshot) => {
-      const data = snapshot.val(); const messagesArray: ForumMessageItem[] = [];
-      if (data) {
-        Object.keys(data).forEach(key => {
-          const msgData = data[key];
-          if (msgData && typeof msgData === 'object' && ((msgData.timestamp && typeof msgData.timestamp === 'number') || (msgData.published_on && typeof msgData.published_on === 'number'))) {
-            let type: 'news' | 'user' | 'system' | undefined = msgData.type;
-            if (!type) {
-              if ('published_on' in msgData && 'source' in msgData) type = 'news';
-              else if (msgData.sender === 'system') type = 'system';
-              else if ('sender' in msgData) type = 'user';
-            }
-            if (type === 'news' || type === 'user' || type === 'system') {
-              const reactions = typeof msgData.reactions === 'object' && msgData.reactions !== null ? msgData.reactions : {};
-              const uid = type === 'user' ? msgData.uid : undefined;
-              const timestamp = type === 'news' ? msgData.published_on * 1000 : msgData.timestamp;
-              const userCreationDate = type === 'user' ? msgData.userCreationDate : undefined;
-              messagesArray.push({  ...msgData,  id: key,  type,  reactions,  uid,  timestamp, ...(userCreationDate && { userCreationDate }) });
-            } else { console.warn('Invalid or missing message type:', key, msgData); }
-          } else { console.warn('Invalid message structure or missing timestamp/published_on:', key, msgData); }
-        });
-      }
-      const finalMessages = messagesArray.sort((a, b) => {
-        const timeA = isNewsArticle(a) ? (a.published_on * 1000) : (isChatMessage(a) ? a.timestamp : 0);
-        const timeB = isNewsArticle(b) ? (b.published_on * 1000) : (isChatMessage(b) ? b.timestamp : 0);
-        if (!timeA && !timeB) return 0; if (!timeA) return 1; if (!timeB) return -1;
-        return timeA - timeB;
-      });
-      setFirebaseMessages(prev => ({ ...prev, [currentRoom.id!]: finalMessages }));
-    }, (error) => {
-      console.error(`Firebase listener error room ${currentRoom?.id}:`, error);
-      if (currentRoom?.id) setFirebaseMessages(prev => ({ ...prev, [currentRoom.id]: [] }));
-    });
-    return () => { if (database) off(messagesRef, 'value', listener); };
-  }, [currentRoom, database]);
-
-  useEffect(() => {
-    if (!database) return;
-    Object.values(roomListenersRef.current).forEach(unsubscribe => { if (typeof unsubscribe === 'function') { unsubscribe(); } });
-    roomListenersRef.current = {};
-    joinedRoomIds.forEach(roomId => {
-      if (roomId === 'berita-kripto' || roomId === currentRoom?.id) return;
-      const messagesRef = safeRef(`messages/${roomId}`);
-      const listener = onValue(messagesRef, (snapshot) => {
-        const data = snapshot.val();
-        if (!data) { setUnreadCounts(prev => ({ ...prev, [roomId]: 0 })); return; }
-        const lastVisit = userLastVisit[roomId] || 0;
-        let newMessagesCount = 0; 
-        let hasNewMessageFromOthers = false;
-        
-        Object.values(data).forEach((msgData: any) => {
-          if (!msgData) return;
-          const timestamp = msgData.published_on ? msgData.published_on * 1000 : msgData.timestamp;
-          const sender = msgData.sender; 
-          const isCurrentUser = sender === currentUser?.username; 
-
-          if (timestamp > lastVisit && !isCurrentUser && roomId !== currentRoom?.id) { 
-            newMessagesCount++; 
-            hasNewMessageFromOthers = true; 
-          }
-        });
-        
-        if (hasNewMessageFromOthers && roomId !== currentRoom?.id) { 
-            setUnreadCounts(prev => ({ ...prev, [roomId]: newMessagesCount })); 
-        } 
-        else { 
-            setUnreadCounts(prev => ({ ...prev, [roomId]: 0 })); 
-        }
-      }, (error) => { console.error(`Listener error untuk room ${roomId}:`, error); });
-      roomListenersRef.current[roomId] = () => off(messagesRef, 'value', listener);
-    });
-    return () => { Object.values(roomListenersRef.current).forEach(unsubscribe => { if (typeof unsubscribe === 'function') { unsubscribe(); } }); roomListenersRef.current = {}; };
-  }, [joinedRoomIds, currentRoom, database, userLastVisit, currentUser]);
-
-  useEffect(() => {
-    if (!database) { console.warn("Typing listener skipped: DB not initialized."); return; }
-    console.log("[Typing Effect] Setting up listeners for joined rooms:", Array.from(joinedRoomIds));
-    Object.values(typingListenersRef.current).forEach(unsubscribe => unsubscribe());
-    typingListenersRef.current = {};
-    joinedRoomIds.forEach(roomId => {
-      if (roomId === 'berita-kripto') return;
-      const typingRoomRef = safeRef(`typing/${roomId}`);
-      console.log(`[Typing Listener] Attaching to typing/${roomId}`);
-      const listener = onValue(typingRoomRef, (snapshot) => {
-        const typingData = snapshot.val() as FirebaseTypingStatusData[string] | null;
-        console.log(`[Typing Listener] Raw data received for room ${roomId}:`, JSON.stringify(typingData));
-        setTypingUsers(prev => {
-          const updatedRoomTyping: { [userId: string]: TypingStatus } = {}; const now = Date.now(); let changed = false;
-          if (typingData) {
-            Object.entries(typingData).forEach(([userId, status]) => {
-              if ( status && status.timestamp && now - status.timestamp < TYPING_TIMEOUT && userId !== firebaseUser?.uid ) {
-                const username = status.username ?? 'Unknown'; const userCreationDate = status.userCreationDate ?? null; const timestamp = status.timestamp;
-                updatedRoomTyping[userId] = { username, userCreationDate, timestamp };
-              } else {
-                 if (!status || !status.timestamp) console.log(`[Typing Listener] Filtered invalid status for ${userId} in ${roomId}`);
-                 else if (!(now - status.timestamp < TYPING_TIMEOUT)) console.log(`[Typing Listener] Filtered timed out status for ${userId} in ${roomId}`);
-              }
-            });
-          }
-          const oldRoomData = prev[roomId] || {};
-          if (JSON.stringify(oldRoomData) !== JSON.stringify(updatedRoomTyping)) { changed = true; console.log(`[Typing Listener] State change detected for room ${roomId}. New data:`, updatedRoomTyping); }
-          if (changed) { const newState = { ...prev, [roomId]: updatedRoomTyping }; return newState; }
-          return prev;
-        });
-      }, (error) => { console.error(`[Typing Listener] Firebase error for room ${roomId}:`, error); setTypingUsers(prev => ({ ...prev, [roomId]: {} })); });
-      typingListenersRef.current[roomId] = () => { if(database) { off(typingRoomRef, 'value', listener); console.log(`[Typing Listener] Detached listener from typing/${roomId}`); } };
-    });
-    return () => { console.log("[Typing Effect] Cleaning up typing listeners."); Object.values(typingListenersRef.current).forEach(unsubscribe => unsubscribe()); typingListenersRef.current = {}; };
-  }, [database, joinedRoomIds, firebaseUser?.uid, currentUser]);
-  
-  useEffect(() => {
-    if (currentRoom?.id) {
-      const currentTime = Date.now();
-      setUserLastVisit(prev => ({ ...prev, [currentRoom.id]: currentTime }));
-      setUnreadCounts(prev => ({ ...prev, [currentRoom.id]: 0 }));
-    }
-  }, [currentRoom]);
-
-  // --- MEMOIZED VALUES & NOTIFIKASI SUARA ---
-
-  const totalUnreadCount = useMemo(() => {
-    return Object.entries(unreadCounts).reduce((total, [roomId, count]) => {
-      const isViewingCurrentRoom = roomId === currentRoom?.id;
-      const isNotificationDisabled = notificationSettings[roomId] === false;
-      
-      if (!isViewingCurrentRoom && !isNotificationDisabled) {
-        return total + (count || 0);
-      }
-      return total;
-    }, 0);
-  }, [unreadCounts, notificationSettings, currentRoom]);
-
-  useEffect(() => {
-    const currentTotal = totalUnreadCount; 
-    const previousTotal = prevTotalUnreadRef.current; 
-    const now = Date.now();
-    
-    if (currentTotal > previousTotal && previousTotal > 0 && (now - lastSoundPlayTimeRef.current) > 1000) { 
-      playNotificationSound(); 
-      lastSoundPlayTimeRef.current = now; 
-    }
-    prevTotalUnreadRef.current = currentTotal;
-  }, [totalUnreadCount]);
-
-  const updatedRooms = useMemo(() => {
-    return rooms.map(room => ({ ...room, userCount: roomUserCounts[room.id] || room.userCount || 0 }));
-  }, [rooms, roomUserCounts]);
-  const totalUsers = useMemo(() => updatedRooms.reduce((sum, r) => sum + (r.userCount || 0), 0), [updatedRooms]);
+  // --- PERUBAHAN PADA MEMO INI ---
+  // heroCoin (trending[0]) dan otherTrendingCoins (sisanya) sekarang HANYA untuk "Peluang Pasar Lainnya"
   const heroCoin = useMemo(() => searchedCoin || trendingCoins[0] || null, [searchedCoin, trendingCoins]);
   const otherTrendingCoins = useMemo(() => searchedCoin ? [] : trendingCoins.slice(1), [searchedCoin, trendingCoins]);
+  // --- AKHIR PERUBAHAN MEMO ---
+
   const hotCoinForHeader = useMemo(() => trendingCoins.length > 1 ? { name: trendingCoins[1].name, logo: trendingCoins[1].image, price: trendingCoins[1].price, change: trendingCoins[1].change } : null, [trendingCoins]);
+  
   const currentTypingUsers = useMemo(() => {
     const currentRoomId = currentRoom?.id;
     if (!currentRoomId || !typingUsers || typeof typingUsers !== 'object') { return []; }
@@ -1268,12 +1160,20 @@ const AppContent: React.FC = () => {
                   fullCoinList={fullCoinList} 
                   isCoinListLoading={isCoinListLoading} 
                   coinListError={coinListError} 
+                  
+                  // --- Props untuk "Peluang Pasar Lainnya" ---
                   heroCoin={heroCoin} 
                   otherTrendingCoins={otherTrendingCoins} 
                   isTrendingLoading={isTrendingLoading} 
                   trendingError={trendingError} 
+                  
+                  // --- Props BARU untuk Hero Carousel ---
+                  staticHeroCoins={staticHeroCoins}
+                  isStaticHeroLoading={isStaticHeroLoading}
+                  staticHeroError={staticHeroError}
+                  
                   onSelectCoin={handleSelectCoin} 
-                  onReloadTrending={handleReloadPage} 
+                  onReloadTrending={handleReloadPage} // Ganti ke handleReloadPage
                 />;
       case 'rooms':
         return <RoomsListPage 

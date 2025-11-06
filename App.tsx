@@ -1,4 +1,3 @@
-// ava19999/rtc/rtc-9801645f9663d83e04560cde6a0aad021d3267a3/App.tsx
 // App.tsx
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { GoogleOAuthProvider, CredentialResponse } from '@react-oauth/google';
@@ -199,9 +198,6 @@ const AppContent: React.FC = () => {
   const roomListenersRef = useRef<{ [roomId: string]: () => void }>({});
   const lastProcessedTimestampsRef = useRef<{ [roomId: string]: number }>({});
   const userSentMessagesRef = useRef<Set<string>>(new Set());
-  
-  // --- REF BARU UNTUK NOTIFIKASI KOIN ---
-  const prevOtherTrendingCoinsRef = useRef<CryptoData[]>([]);
 
   // --- FUNCTION DEFINITIONS (useCallback) ---
   
@@ -1240,12 +1236,8 @@ const AppContent: React.FC = () => {
     return rooms.map(room => ({ ...room, userCount: roomUserCounts[room.id] || room.userCount || 0 }));
   }, [rooms, roomUserCounts]);
   const totalUsers = useMemo(() => updatedRooms.reduce((sum, r) => sum + (r.userCount || 0), 0), [updatedRooms]);
-  
-  // --- PERUBAHAN LOGIKA HERO & PELUANG LAIN ---
-  const heroCoins = useMemo(() => searchedCoin ? [searchedCoin] : trendingCoins.slice(0, 5), [searchedCoin, trendingCoins]);
-  const otherTrendingCoins = useMemo(() => searchedCoin ? [] : trendingCoins.slice(5), [searchedCoin, trendingCoins]);
-  // --- AKHIR PERUBAHAN ---
-
+  const heroCoin = useMemo(() => searchedCoin || trendingCoins[0] || null, [searchedCoin, trendingCoins]);
+  const otherTrendingCoins = useMemo(() => searchedCoin ? [] : trendingCoins.slice(1), [searchedCoin, trendingCoins]);
   const hotCoinForHeader = useMemo(() => trendingCoins.length > 1 ? { name: trendingCoins[1].name, logo: trendingCoins[1].image, price: trendingCoins[1].price, change: trendingCoins[1].change } : null, [trendingCoins]);
   const currentTypingUsers = useMemo(() => {
     const currentRoomId = currentRoom?.id;
@@ -1264,45 +1256,6 @@ const AppContent: React.FC = () => {
     return filteredUsers;
   }, [typingUsers, currentRoom, firebaseUser?.uid]);
 
-  // --- EFEK BARU UNTUK NOTIFIKASI KOIN BARU ---
-  useEffect(() => {
-    // Jangan kirim notif saat loading, saat user mencari koin, atau saat pertama kali load (prev list kosong)
-    if (isTrendingLoading || searchedCoin || prevOtherTrendingCoinsRef.current.length === 0) {
-      // Tetap update ref bahkan jika kita return
-      prevOtherTrendingCoinsRef.current = otherTrendingCoins;
-      return;
-    }
-
-    const previousList = prevOtherTrendingCoinsRef.current;
-    const currentList = otherTrendingCoins;
-
-    const previousIds = new Set(previousList.map(c => c.id));
-    const newCoins = currentList.filter(c => !previousIds.has(c.id));
-
-    if (newCoins.length > 0) {
-      console.log("Notifikasi Peluang Baru Terdeteksi:", newCoins);
-      newCoins.forEach(newCoin => {
-        const notificationPayload = {
-          roomId: 'berita-kripto', // Kirim notifikasi seolah-olah dari room 'berita-kripto'
-          sender: 'RTC Bot',
-          text: `🔥 Peluang Baru: ${newCoin.name} (${newCoin.symbol.toUpperCase()}) baru saja masuk daftar tren!`
-        };
-        
-        // Panggil Vercel Function untuk mengirim notifikasi push
-        fetch('/api/sendNotification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(notificationPayload),
-        }).catch(err => console.error('Gagal trigger notifikasi koin baru:', err));
-      });
-    }
-
-    // Update ref untuk perbandingan berikutnya
-    prevOtherTrendingCoinsRef.current = currentList;
-
-  }, [otherTrendingCoins, isTrendingLoading, searchedCoin]);
-
-
   // --- RENDER LOGIC ---
   const renderActivePage = () => {
     switch (activePage) {
@@ -1315,7 +1268,7 @@ const AppContent: React.FC = () => {
                   fullCoinList={fullCoinList} 
                   isCoinListLoading={isCoinListLoading} 
                   coinListError={coinListError} 
-                  heroCoins={heroCoins} // <-- Diubah
+                  heroCoin={heroCoin} 
                   otherTrendingCoins={otherTrendingCoins} 
                   isTrendingLoading={isTrendingLoading} 
                   trendingError={trendingError} 

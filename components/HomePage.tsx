@@ -1,11 +1,9 @@
-// ava19999/rtc/rtc-9801645f9663d83e04560cde6a0aad021d3267a3/components/HomePage.tsx
 // HomePage.tsx
 import React, { useState, useCallback, useRef, lazy, Suspense, useEffect } from 'react';
 import { fetchCryptoAnalysis } from '../services/geminiService';
 import CryptoCard from './CryptoCard';
 import type { HomePageProps, MarketDominance, CryptoData, AnalysisResult, ExchangeTicker, CoinListItem } from '../types';
-// HeroCoin tidak lagi digunakan, kita akan menggunakan CryptoCard
-// import HeroCoin from './HeroCoin'; 
+import HeroCoin from './HeroCoin';
 import DominanceTicker from './DominanceTicker';
 import {
   fetchMarketDominance,
@@ -14,8 +12,29 @@ import {
 
 const AnalysisModal = lazy(() => import('./AnalysisModal'));
 
-// SkeletonHero tidak lagi digunakan, kita pakai SkeletonCard
-// const SkeletonHero = () => ( ... );
+const SkeletonHero = () => (
+    <div className="bg-gray-900 border border-white/10 rounded-xl p-4 w-full relative overflow-hidden">
+        <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+                <div className="flex items-center mb-3">
+                    <div className="h-10 w-10 bg-gray-700 rounded-full mr-3"></div>
+                    <div className="flex-1 space-y-1.5">
+                        <div className="h-5 w-3/4 bg-gray-700 rounded"></div>
+                        <div className="h-3 w-1/4 bg-gray-700 rounded"></div>
+                    </div>
+                </div>
+                <div className="h-8 w-1/2 bg-gray-700 rounded my-1.5"></div>
+                <div className="h-16 w-full bg-gray-700 rounded mt-3"></div>
+            </div>
+            <div className="w-full md:w-1/3 space-y-3">
+                <div className="h-7 w-full bg-gray-700 rounded"></div>
+                <div className="h-7 w-full bg-gray-700 rounded"></div>
+                <div className="h-10 w-full bg-gray-700 rounded mt-3"></div>
+            </div>
+        </div>
+        <div className="absolute top-0 left-0 w-full h-full skeleton-shimmer"></div>
+    </div>
+);
 
 const SkeletonCard = () => (
   <div className="bg-gray-900 border border-white/10 rounded-xl p-3 h-full w-48 flex-shrink-0 relative overflow-hidden">
@@ -35,8 +54,7 @@ const SkeletonCard = () => (
 const HomePage: React.FC<HomePageProps> = ({ 
     idrRate, isRateLoading, currency, onIncrementAnalysisCount, 
     fullCoinList, isCoinListLoading, coinListError,
-    heroCoins, // <-- Diubah dari heroCoin
-    otherTrendingCoins, isTrendingLoading, trendingError, onSelectCoin, onReloadTrending
+    heroCoin, otherTrendingCoins, isTrendingLoading, trendingError, onSelectCoin, onReloadTrending
 }) => {
   const [marketDominance, setMarketDominance] = useState<MarketDominance | null>(null);
   const [isDominanceLoading, setIsDominanceLoading] = useState(true);
@@ -115,44 +133,13 @@ const HomePage: React.FC<HomePageProps> = ({
 
   const closeModal = () => { setIsModalOpen(false); setSelectedCrypto(null); };
   
-  // --- FUNGSI RENDER BARU ---
-  
-  // Helper untuk render 5 hero koin (dirender 2x untuk loop)
-  const renderHeroCoins = () => (
-    <div className="flex space-x-3">
-      {/* Render 5 koin, lalu render 5 koin yang sama lagi untuk loop animasi */}
-      {[...heroCoins, ...heroCoins].map((crypto, index) => (
-        <CryptoCard 
-          key={`${crypto.id}-${index}`} 
-          crypto={crypto} 
-          onAnalyze={handleAnalyze} 
-          idrRate={idrRate} 
-          currency={currency} 
-        />
-      ))}
-    </div>
-  );
-
-  // Skeleton untuk 5 hero koin
-  const renderHeroSkeleton = () => (
-    <div className="flex space-x-3 overflow-hidden pb-3 -mx-3 px-3">
-      {Array.from({ length: 5 }).map((_, index) => <SkeletonCard key={index} />)}
-    </div>
-  );
-  
   const renderContent = () => {
     if (isTrendingLoading) {
       return (
         <>
-          {/* Tampilkan skeleton untuk hero koin */}
-          {renderHeroSkeleton()}
-          
-          {/* Tampilkan skeleton untuk "Peluang Lainnya" */}
-          <div className="mt-4">
-            <h3 className="text-base font-bold text-gray-300 mb-2 h-5 w-1/3 bg-gray-700 rounded animate-pulse"></h3>
-            <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar">
-              {Array.from({ length: 2 }).map((_, index) => <SkeletonCard key={index} />)}
-            </div>
+          <SkeletonHero />
+          <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar mt-4">
+            {Array.from({ length: 4 }).map((_, index) => <SkeletonCard key={index} />)}
           </div>
         </>
       );
@@ -169,20 +156,7 @@ const HomePage: React.FC<HomePageProps> = ({
     }
     return (
       <div className="animate-fade-in-content">
-        
-        {/* --- BAGIAN HERO KOIN BARU (TOP 5) --- */}
-        {heroCoins.length > 0 && (
-          <div 
-            className="marquee-container w-full overflow-x-auto custom-scrollbar pb-3 -mx-3 px-3" 
-            tabIndex={0} // Untuk event focus (accessibility)
-          >
-            <div className="animate-marquee">
-              {renderHeroCoins()}
-            </div>
-          </div>
-        )}
-        
-        {/* --- BAGIAN PELUANG LAINNYA --- */}
+        {heroCoin && <HeroCoin crypto={heroCoin} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />}
         {otherTrendingCoins.length > 0 && (
           <div className="mt-4">
              <h3 className="text-base font-bold text-gray-300 mb-2">Peluang Pasar Lainnya</h3>
@@ -245,22 +219,6 @@ const HomePage: React.FC<HomePageProps> = ({
             .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
             .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 2px; }
             .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0, 191, 255, 0.5); }
-            
-            /* --- CSS BARU UNTUK MARQUEE --- */
-            @keyframes marquee {
-              from { transform: translateX(0); }
-              to { transform: translateX(-50%); }
-            }
-            .animate-marquee {
-              display: flex;
-              width: max-content; /* Biarkan konten (2x 5 kartu) menentukan lebarnya */
-              animation: marquee 30s linear infinite;
-            }
-            .marquee-container:hover .animate-marquee,
-            .marquee-container:focus-within .animate-marquee {
-              animation-play-state: paused;
-            }
-            /* --- AKHIR CSS BARU --- */
         `}</style>
     </div>
   );

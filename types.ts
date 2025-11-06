@@ -1,3 +1,4 @@
+// ava19999/rtc/rtc-9801645f9663d83e04560cde6a0aad021d3267a3/types.ts
 // types.ts
 import type { CredentialResponse } from '@react-oauth/google';
 
@@ -163,7 +164,7 @@ export interface HomePageProps {
   fullCoinList: CoinListItem[];
   isCoinListLoading: boolean;
   coinListError: string | null;
-  heroCoin: CryptoData | null;
+  heroCoins: CryptoData[]; // <-- Diubah dari heroCoin: CryptoData | null
   otherTrendingCoins: CryptoData[];
   isTrendingLoading: boolean;
   trendingError: string | null;

@@ -26,15 +26,11 @@ export const fetchIdrRate = async (): Promise<number> => {
 export const fetchTrendingCoins = async (): Promise<CryptoData[]> => {
     const trendingUrl = `${COINGECKO_API_BASE_URL}/search/trending`;
     const trendingData = await apiRequest(trendingUrl, CACHE_DURATION.DEFAULT);
-    
-    // --- PERUBAHAN DI SINI ---
-    // Ubah .slice(0, 7) menjadi .slice(0, 11) untuk mengambil 11 koin
-    const trendingIds = trendingData.coins.map((c: any) => c.item.id).slice(0, 11).join(',');
-    // --- AKHIR PERUBAHAN ---
+    const trendingIds = trendingData.coins.map((c: any) => c.item.id).slice(0, 7).join(',');
 
     if (!trendingIds) return [];
 
-    const coinsUrl = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&ids=${trendingIds}&order=market_cap_desc&per_page=11&page=1&sparkline=true&price_change_percentage=24h`;
+    const coinsUrl = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&ids=${trendingIds}&order=market_cap_desc&per_page=10&page=1&sparkline=true&price_change_percentage=24h`;
     const coinsData = await apiRequest(coinsUrl, CACHE_DURATION.DEFAULT);
     return coinsData.map(mapCoinGeckoToCryptoData);
 };

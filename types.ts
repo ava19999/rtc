@@ -40,7 +40,10 @@ export interface AnalysisResult {
   position: 'Long' | 'Short';
   entryPrice: string;
   stopLoss: string;
-  takeProfit: string;
+  // --- PERUBAHAN DI SINI ---
+  takeProfit1: string; // Diubah dari takeProfit
+  takeProfit2?: string; // Ditambahkan (opsional)
+  // --- AKHIR PERUBAHAN ---
   confidence: string;
   reasoning: string;
 }

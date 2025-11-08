@@ -84,7 +84,9 @@ const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null
     const isLong = result.position === 'Long';
     const entry = parseAndConvertPrice(result.entryPrice, idrRate, currency);
     const stop = parseAndConvertPrice(result.stopLoss, idrRate, currency);
-    const profit = parseAndConvertPrice(result.takeProfit, idrRate, currency);
+    // --- PERUBAHAN DI SINI ---
+    const profit = parseAndConvertPrice(result.takeProfit1, idrRate, currency); // Menggunakan takeProfit1
+    // --- AKHIR PERUBAHAN ---
 
     const confidenceStyles: { [key: string]: string } = {
         High: 'bg-lime/20 text-lime',

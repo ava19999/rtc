@@ -156,15 +156,18 @@ const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null
                     </button>
                  </div>
 
-                <div className="bg-black/20 border-l-2 border-electric/50 p-2 rounded-r-lg h-[300px] flex items-center justify-center overflow-hidden">
+                {/* FIXED: Chart container dengan height yang jelas */}
+                <div className="bg-black/20 border-l-2 border-electric/50 rounded-r-lg h-[300px] overflow-hidden">
                     {showHeatmap ? (
                         <div className="w-full h-full">
                             <RealtimeChart symbol={cryptoSymbol} />
                         </div>
                     ) : (
-                        <p className="text-xs text-gray-300 leading-relaxed italic h-full overflow-y-auto">
-                            {result.reasoning}
-                        </p>
+                        <div className="p-3 h-full overflow-y-auto">
+                            <p className="text-xs text-gray-300 leading-relaxed italic">
+                                {result.reasoning}
+                            </p>
+                        </div>
                     )}
                 </div>
             </div>

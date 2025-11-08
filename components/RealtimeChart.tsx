@@ -37,82 +37,96 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // --- PERBAIKAN DI SINI ---
-    // Kita tetap menggunakan setTimeout untuk menunggu DOM render.
-    const chartTimeout = setTimeout(() => {
+    // --- PERBAIKAN BARU: Menggunakan polling via requestAnimationFrame ---
+    
+    // Cek jika chart sudah ada, jangan buat lagi.
+    if (chartRef.current || !chartContainerRef.current) {
+        return;
+    }
+
+    let animationFrameId: number;
+    const startTime = Date.now();
+    const maxWaitTime = 2000; // Tunggu maksimal 2 detik
+
+    const createChartWhenReady = () => {
         if (!chartContainerRef.current) {
-            console.warn("Chart container ref hilang, membatalkan.");
-            return;
+            return; // Komponen unmount
         }
 
-        // Penjaga 1: Pastikan kontainer memiliki lebar.
+        // Cek 1: Apakah kontainer sudah punya lebar?
         const containerWidth = chartContainerRef.current.clientWidth;
-        if (containerWidth === 0) {
-            console.warn("Lebar kontainer chart 0. Membatalkan render.");
-            setError("Gagal memuat chart. Coba buka-tutup modal.");
-            return;
-        }
-
-        // Penjaga 2: Jangan buat chart jika sudah ada.
-        if (chartRef.current) {
-            console.log("Chart sudah ada, tidak membuat lagi.");
-            return;
-        }
-
-        // Buat chart
-        const chart = createChart(chartContainerRef.current, {
-            width: containerWidth,
-            height: 300, 
-            layout: {
-                background: { type: ColorType.Solid, color: 'transparent' },
-                textColor: '#D1D5DB',
-            },
-            grid: {
-                vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
-                horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
-            },
-            timeScale: {
-                borderColor: 'rgba(255, 255, 255, 0.2)',
-                timeVisible: true,
-                secondsVisible: false,
-            },
-            rightPriceScale: {
-                borderColor: 'rgba(255, 255, 255, 0.2)',
-            },
-        });
-
-        // Penjaga 3: Cek apakah objek chart valid sebelum menambah series
-        // Ini adalah perbaikan langsung untuk error Anda.
-        if (chart && typeof chart.addCandlestickSeries === 'function') {
-            chartRef.current = chart; // Simpan ref HANYA jika valid
+        if (containerWidth > 0) {
+            // --- KONTANIER SIAP, BUAT CHART ---
+            console.log(`Kontainer siap (lebar: ${containerWidth}px). Membuat chart.`);
             
-            seriesRef.current = chart.addCandlestickSeries({
-                upColor: '#32CD32',
-                downColor: '#FF00FF',
-                borderDownColor: '#FF00FF',
-                borderUpColor: '#32CD32',
-                wickDownColor: '#FF00FF',
-                wickUpColor: '#32CD32',
+            const chart = createChart(chartContainerRef.current, {
+                width: containerWidth,
+                height: 300, 
+                layout: {
+                    background: { type: ColorType.Solid, color: 'transparent' },
+                    textColor: '#D1D5DB',
+                },
+                grid: {
+                    vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                    horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                },
+                timeScale: {
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+                rightPriceScale: {
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                },
             });
 
-            // Ambil data
-            fetchChartData(symbol, '4h').then(data => {
-                if (data && data.length > 0) {
-                    seriesRef.current?.setData(data);
-                    chartRef.current?.timeScale().fitContent();
-                } else {
-                    setError(`Data chart 4 jam tidak tersedia untuk ${symbol}USDT`);
-                }
-            });
+            // Cek 2: Apakah createChart berhasil?
+            if (chart && typeof chart.addCandlestickSeries === 'function') {
+                chartRef.current = chart; 
+                
+                seriesRef.current = chart.addCandlestickSeries({
+                    upColor: '#32CD32',
+                    downColor: '#FF00FF',
+                    borderDownColor: '#FF00FF',
+                    borderUpColor: '#32CD32',
+                    wickDownColor: '#FF00FF',
+                    wickUpColor: '#32CD32',
+                });
+
+                // Ambil data
+                fetchChartData(symbol, '4h').then(data => {
+                    if (data && data.length > 0) {
+                        seriesRef.current?.setData(data);
+                        chartRef.current?.timeScale().fitContent();
+                    } else {
+                        setError(`Data chart 4 jam tidak tersedia untuk ${symbol}USDT`);
+                    }
+                });
+            } else {
+                console.error("Gagal membuat chart, objek tidak valid.", chart);
+                setError("Gagal menginisialisasi chart. Coba lagi.");
+            }
+            // --- SELESAI, JANGAN LOOP LAGI ---
+
         } else {
-            // Jika kita masuk ke sini, berarti createChart gagal
-            console.error("Gagal membuat chart, objek tidak valid.", chart);
-            setError("Gagal menginisialisasi chart. Coba lagi.");
-        }
-        
-    }, 100); // Kita beri waktu 100ms agar lebih aman
-    // --- AKHIR PERBAIKAN ---
+            // --- KONTANIER BELUM SIAP, TUNGGU FRAME BERIKUTNYA ---
+            
+            // Cek 3: Apakah sudah timeout?
+            if (Date.now() - startTime > maxWaitTime) {
+                console.error("Gagal membuat chart: Timeout. Lebar kontainer masih 0.");
+                setError("Gagal memuat chart: Kontainer tidak merespon. Coba tutup & buka lagi.");
+                return; // Hentikan loop
+            }
 
+            // Coba lagi di frame berikutnya
+            animationFrameId = requestAnimationFrame(createChartWhenReady);
+        }
+    };
+
+    // Mulai polling
+    animationFrameId = requestAnimationFrame(createChartWhenReady);
+    // --- AKHIR PERBAIKAN ---
+    
     // Handle resize
     const handleResize = () => {
         if (chartContainerRef.current && chartRef.current) {
@@ -123,12 +137,12 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
 
     // Cleanup
     return () => {
-        clearTimeout(chartTimeout); 
+        cancelAnimationFrame(animationFrameId); // Hentikan polling jika unmount
         window.removeEventListener('resize', handleResize);
         chartRef.current?.remove();
         chartRef.current = null; // Reset ref
     };
-  }, [symbol]); 
+  }, [symbol]); // Tetap jalankan hanya saat simbol berubah
 
   if (error) {
       return (

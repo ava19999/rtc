@@ -25,7 +25,6 @@ const analysisSchema = {
       type: Type.STRING,
       description: 'The recommended price for a stop-loss. Return ONLY the number (e.g., "67000"), WITHOUT any currency symbols like $.',
     },
-    // --- PERUBAHAN DI SINI ---
     takeProfit1: {
         type: Type.STRING,
         description: 'The recommended first, more conservative take-profit target. Return ONLY the number (e.g., "72000"), WITHOUT any currency symbols like $.',
@@ -33,9 +32,8 @@ const analysisSchema = {
     takeProfit2: {
         type: Type.STRING,
         description: 'An optional, more optimistic take-profit target for potential further gains. Return ONLY the number (e.g., "75000"), WITHOUT any currency symbols like $.',
-        optional: true
+        // --- PERUBAHAN DI SINI: Baris 'optional: true' telah dihapus ---
     },
-    // --- AKHIR PERUBAHAN ---
     confidence: {
       type: Type.STRING,
       description: 'The confidence level of this analysis (e.g., "High", "Medium", "Low").',
@@ -45,9 +43,8 @@ const analysisSchema = {
       description: 'A brief, professional rationale for the chosen price points and position, grounded in technical or market analysis principles.',
     },
   },
-  // --- PERUBAHAN DI SINI ---
+  // Properti `takeProfit2` bersifat opsional karena tidak ada di daftar 'required' ini
   required: ['position', 'entryPrice', 'stopLoss', 'takeProfit1', 'confidence', 'reasoning'],
-  // --- AKHIR PERUBAHAN ---
 };
 
 // 3. Buat handler untuk Vercel
@@ -88,9 +85,7 @@ export default async function handler(
 
     **Format Output:**
     -   Ikuti skema JSON yang disediakan dengan ketat.
-    // --- PERUBAHAN DI SINI ---
     -   Sediakan DUA target take-profit jika memungkinkan: 'takeProfit1' (target konservatif pertama) dan 'takeProfit2' (target optimis). Jika hanya satu target yang masuk akal, sediakan 'takeProfit1' saja.
-    // --- AKHIR PERUBAHAN ---
     -   Untuk 'position' dan 'confidence', GUNAKAN nilai bahasa Inggris seperti yang dicontohkan dalam skema (misalnya, "Long", "Short", "High", "Medium", "Low").
     -   Untuk 'reasoning', berikan penjelasan singkat dan padat dalam **Bahasa Indonesia**, seolah-olah Anda sedang memberi pengarahan kepada seorang trader profesional. Jelaskan logika teknis di balik titik masuk, stop loss, dan target profit.
     -   Pastikan semua titik harga yang direkomendasikan masuk akal relatif terhadap harga saat ini.

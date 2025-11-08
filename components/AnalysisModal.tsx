@@ -1,9 +1,6 @@
 // components/AnalysisModal.tsx
 import React, { useState } from 'react';
-// --- PERUBAHAN DI SINI ---
-// Pastikan Anda mengimpor RealtimeChart
 import RealtimeChart from './RealtimeChart';
-// --- AKHIR PERUBAHAN ---
 import type { AnalysisModalProps, AnalysisResult, Currency, ExchangeTicker } from '../types';
 
 const formatUsd = (price: number): string => {
@@ -84,7 +81,6 @@ const ErrorDisplay = ({ title, message }: { title: string, message: string }) =>
     </div>
 );
 
-// --- PERUBAHAN DI SINI: Tambahkan `cryptoSymbol` ke props ---
 const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null, currency: Currency, cryptoSymbol: string }> = ({ result, idrRate, currency, cryptoSymbol }) => {
     const [showHeatmap, setShowHeatmap] = useState(false);
 
@@ -160,20 +156,17 @@ const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null
                     </button>
                  </div>
 
-                {/* --- PERUBAHAN DI SINI --- */}
-                {/* 1. Menetapkan tinggi tetap h-[300px] agar "pas" dan "optimal" */}
-                {/* 2. Menambahkan overflow-hidden agar chart tidak bocor */}
                 <div className="bg-black/20 border-l-2 border-electric/50 p-2 rounded-r-lg h-[300px] flex items-center justify-center overflow-hidden">
                     {showHeatmap ? (
-                        <RealtimeChart symbol={cryptoSymbol} />
+                        <div className="w-full h-full">
+                            <RealtimeChart symbol={cryptoSymbol} />
+                        </div>
                     ) : (
-                        // 3. Menambahkan overflow-y-auto agar teks bisa discroll jika panjang
                         <p className="text-xs text-gray-300 leading-relaxed italic h-full overflow-y-auto">
                             {result.reasoning}
                         </p>
                     )}
                 </div>
-                {/* --- AKHIR PERUBAHAN --- */}
             </div>
         </div>
     );
@@ -271,7 +264,6 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                      <div className="flex items-center justify-center bg-black/20 rounded-lg p-2 min-h-[240px]">
                         {isLoading && <ProfitAnimation />}
                         {error && !isLoading && <ErrorDisplay title="Analisis Gagal" message={error} />}
-                        {/* --- PERUBAHAN DI SINI: Kirim simbol koin ke AnalysisContent --- */}
                         {analysisResult && !isLoading && <AnalysisContent result={analysisResult} idrRate={idrRate} currency={currency} cryptoSymbol={crypto.symbol} />}
                      </div>
                 </div>

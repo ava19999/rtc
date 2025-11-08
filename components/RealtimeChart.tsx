@@ -1,6 +1,9 @@
 // components/RealtimeChart.tsx
 import React, { useEffect, useRef, memo, useState } from 'react';
-import { createChart, IChartApi, ISeriesApi, ColorType } from 'lightweight-charts';
+// --- PERUBAHAN DI SINI ---
+// Kita hanya mengimpor TIPE, bukan fungsi `createChart`
+import type { IChartApi, ISeriesApi } from 'lightweight-charts';
+// --- AKHIR PERUBAHAN ---
 
 interface ChartProps {
   symbol: string; // Misal: "BTC"
@@ -35,78 +38,84 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // Tambahkan state loading
 
   useEffect(() => {
-    // Pastikan kontainer ada
     if (!chartContainerRef.current) return;
     
-    // --- PERBAIKAN: Menggunakan ResizeObserver ---
-    // Ini adalah cara paling handal untuk menunggu
-    // container <div> memiliki ukuran yang valid (bukan 0).
-    
+    let chart: IChartApi | null = null;
     const chartContainer = chartContainerRef.current;
 
-    const resizeObserver = new ResizeObserver(entries => {
+    const resizeObserver = new ResizeObserver(async (entries) => {
         const entry = entries[0];
         if (!entry) return;
 
         const { width, height } = entry.contentRect;
 
-        // Cek jika sudah memiliki ukuran (lebih besar dari 0)
-        // DAN chart belum pernah dibuat (chartRef.current masih null)
+        // Cek jika ukuran valid DAN chart belum dibuat
         if (width > 0 && height > 0 && !chartRef.current) {
-            console.log(`Kontainer siap (W: ${width}, H: ${height}). Membuat chart.`);
+            // Kita hanya ingin ini berjalan SEKALI.
+            resizeObserver.disconnect();
             
-            const chart = createChart(chartContainer, {
-                width,
-                height,
-                layout: {
-                    background: { type: ColorType.Solid, color: 'transparent' },
-                    textColor: '#D1D5DB',
-                },
-                grid: {
-                    vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
-                    horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
-                },
-                timeScale: {
-                    borderColor: 'rgba(255, 255, 255, 0.2)',
-                    timeVisible: true,
-                    secondsVisible: false,
-                },
-                rightPriceScale: {
-                    borderColor: 'rgba(255, 255, 255, 0.2)',
-                },
-            });
+            try {
+                // --- PERUBAHAN UTAMA: DYNAMIC IMPORT ---
+                // Impor library HANYA SETELAH container siap
+                const { createChart, ColorType } = await import('lightweight-charts');
+                // --- AKHIR PERUBAHAN ---
 
-            // Cek lagi apakah createChart berhasil
-            if (chart && typeof chart.addCandlestickSeries === 'function') {
-                chartRef.current = chart; // Simpan ref
-                
-                seriesRef.current = chart.addCandlestickSeries({
-                    upColor: '#32CD32',
-                    downColor: '#FF00FF',
-                    borderDownColor: '#FF00FF',
-                    borderUpColor: '#32CD32',
-                    wickDownColor: '#FF00FF',
-                    wickUpColor: '#32CD32',
+                chart = createChart(chartContainer, {
+                    width,
+                    height,
+                    layout: {
+                        background: { type: ColorType.Solid, color: 'transparent' },
+                        textColor: '#D1D5DB',
+                    },
+                    grid: {
+                        vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                        horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                    },
+                    timeScale: {
+                        borderColor: 'rgba(255, 255, 255, 0.2)',
+                        timeVisible: true,
+                        secondsVisible: false,
+                    },
+                    rightPriceScale: {
+                        borderColor: 'rgba(255, 255, 255, 0.2)',
+                    },
                 });
+                
+                // Cek apakah createChart berhasil
+                if (chart && typeof chart.addCandlestickSeries === 'function') {
+                    chartRef.current = chart; // Simpan ref
+                    
+                    const series = chart.addCandlestickSeries({
+                        upColor: '#32CD32',
+                        downColor: '#FF00FF',
+                        borderDownColor: '#FF00FF',
+                        borderUpColor: '#32CD32',
+                        wickDownColor: '#FF00FF',
+                        wickUpColor: '#32CD32',
+                    });
+                    seriesRef.current = series;
 
-                // Ambil data
-                fetchChartData(symbol, '4h').then(data => {
+                    // Ambil data
+                    const data = await fetchChartData(symbol, '4h');
                     if (data && data.length > 0) {
-                        seriesRef.current?.setData(data);
-                        chartRef.current?.timeScale().fitContent();
+                        series.setData(data);
+                        chart.timeScale().fitContent();
+                        setIsLoading(false); // Sembunyikan loading
                     } else {
                         setError(`Data chart 4 jam tidak tersedia untuk ${symbol}USDT`);
+                        setIsLoading(false);
                     }
-                });
-                
-                // Setelah chart berhasil dibuat, kita tidak perlu mengamati lagi
-                resizeObserver.disconnect();
-
-            } else {
-                console.error("Gagal membuat chart, objek tidak valid.", chart);
-                setError("Gagal menginisialisasi chart. Coba lagi.");
+                } else {
+                    // Ini seharusnya tidak terjadi lagi, tapi sebagai penjaga
+                    throw new Error("createChart gagal mengembalikan objek yang valid.");
+                }
+            } catch (err: any) {
+                console.error("Gagal saat inisialisasi chart:", err);
+                setError(err.message || "Gagal menginisialisasi chart. Coba lagi.");
+                setIsLoading(false);
             }
         }
     });
@@ -140,6 +149,16 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
               {error}
           </div>
       );
+  }
+  
+  // Tampilkan loading spinner saat chart/data sedang disiapkan
+  if (isLoading) {
+     return (
+        <div className="w-full h-full flex flex-col items-center justify-center space-y-1.5">
+            <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-electric/50"></div>
+            <p className="text-gray-400 text-xs">Memuat data chart...</p>
+        </div>
+     );
   }
 
   // h-full akan mengambil tinggi dari parent-nya (yaitu h-[300px] di AnalysisModal)

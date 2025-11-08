@@ -1,7 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import admin from 'firebase-admin';
-// Impor konstanta URL dari root proyek
-import { COINGECKO_API_BASE_URL } from '../constants';
+
+// --- PERUBAHAN 1: HAPUS BARIS IMPORT INI ---
+// import { COINGECKO_API_BASE_URL } from '../constants'; 
+
+// --- PERUBAHAN 2: TAMBAHKAN KONSTANTA LANGSUNG DI SINI ---
+const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3';
+// --- AKHIR PERUBAHAN ---
+
 
 // --- Inisialisasi Firebase Admin ---
 const serviceAccountJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
@@ -66,12 +72,10 @@ async function postMessageToRoom(db: admin.database.Database, coinNames: string)
 }
 
 export default async (req: VercelRequest, res: VercelResponse) => {
-  // --- PERUBAHAN DI SINI ---
   // Kita ubah dari POST ke GET, agar Uptime Robot bisa memanggilnya
   if (req.method !== 'GET') {
     return res.status(405).send('Method Not Allowed (Only GET accepted)');
   }
-  // --- AKHIR PERUBAHAN ---
 
   if (!admin.apps.length) {
     console.error('[checkTrendingCoins] Firebase Admin not initialized. Aborting.');

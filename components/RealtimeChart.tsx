@@ -39,47 +39,58 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
-    // Buat chart
-    chartRef.current = createChart(chartContainerRef.current, {
-      width: chartContainerRef.current.clientWidth,
-      height: 300, // Atur tinggi chart
-      layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#D1D5DB', // Teks abu-abu
-      },
-      grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
-      },
-      timeScale: {
-        borderColor: 'rgba(255, 255, 255, 0.2)',
-        timeVisible: true,
-        secondsVisible: false,
-      },
-      rightPriceScale: {
-        borderColor: 'rgba(255, 255, 255, 0.2)',
-      },
-    });
+    // --- PERBAIKAN DI SINI ---
+    // Kita gunakan setTimeout untuk menunda eksekusi hingga DOM stabil.
+    // Ini memperbaiki bug "layar putih" di mana chart mencoba render
+    // sebelum container-nya memiliki lebar (width).
+    const chartTimeout = setTimeout(() => {
+        if (!chartContainerRef.current) return;
 
-    // Tambahkan seri candlestick
-    seriesRef.current = chartRef.current.addCandlestickSeries({
-        upColor: '#32CD32', // Warna lime
-        downColor: '#FF00FF', // Warna magenta
-        borderDownColor: '#FF00FF',
-        borderUpColor: '#32CD32',
-        wickDownColor: '#FF00FF',
-        wickUpColor: '#32CD32',
-    });
+        // Cek jika chart sudah ada, jangan buat lagi
+        if (chartRef.current) return;
 
-    // Ambil data saat komponen dimuat
-    fetchChartData(symbol, '4h').then(data => {
-        if (data && data.length > 0) {
-            seriesRef.current?.setData(data);
-            chartRef.current?.timeScale().fitContent();
-        } else {
-            setError(`Data chart 4 jam tidak tersedia untuk ${symbol}USDT`);
-        }
-    });
+        // Buat chart
+        chartRef.current = createChart(chartContainerRef.current, {
+            width: chartContainerRef.current.clientWidth,
+            height: 300, // Atur tinggi chart
+            layout: {
+                background: { type: ColorType.Solid, color: 'transparent' },
+                textColor: '#D1D5DB', // Teks abu-abu
+            },
+            grid: {
+                vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
+            },
+            timeScale: {
+                borderColor: 'rgba(255, 255, 255, 0.2)',
+                timeVisible: true,
+                secondsVisible: false,
+            },
+            rightPriceScale: {
+                borderColor: 'rgba(255, 255, 255, 0.2)',
+            },
+        });
+
+        // Tambahkan seri candlestick
+        seriesRef.current = chartRef.current.addCandlestickSeries({
+            upColor: '#32CD32', // Warna lime
+            downColor: '#FF00FF', // Warna magenta
+            borderDownColor: '#FF00FF',
+            borderUpColor: '#32CD32',
+            wickDownColor: '#FF00FF',
+            wickUpColor: '#32CD32',
+        });
+
+        // Ambil data saat komponen dimuat
+        fetchChartData(symbol, '4h').then(data => {
+            if (data && data.length > 0) {
+                seriesRef.current?.setData(data);
+                chartRef.current?.timeScale().fitContent();
+            } else {
+                setError(`Data chart 4 jam tidak tersedia untuk ${symbol}USDT`);
+            }
+        });
+    }, 0); // Timeout 0 detik sudah cukup
 
     // Handle resize
     const handleResize = () => {
@@ -91,10 +102,12 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
 
     // Cleanup
     return () => {
+        clearTimeout(chartTimeout); // Hapus timeout jika komponen unmount
         window.removeEventListener('resize', handleResize);
         chartRef.current?.remove();
+        chartRef.current = null; // Reset ref
     };
-  }, [symbol]);
+  }, [symbol]); // Tetap jalankan hanya saat simbol berubah
 
   if (error) {
       return (

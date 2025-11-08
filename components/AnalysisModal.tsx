@@ -1,6 +1,9 @@
 // AnalysisModal.tsx
 import React, { useState } from 'react';
 import type { AnalysisModalProps, AnalysisResult, Currency, ExchangeTicker } from '../types';
+// --- TAMBAHKAN IMPOR INI ---
+import RealtimeChart from './RealtimeChart';
+// --- AKHIR TAMBAHAN ---
 
 const formatUsd = (price: number): string => {
   return new Intl.NumberFormat('en-US', {
@@ -80,13 +83,15 @@ const ErrorDisplay = ({ title, message }: { title: string, message: string }) =>
     </div>
 );
 
-const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null, currency: Currency }> = ({ result, idrRate, currency }) => {
+// --- PERUBAHAN DI SINI: Tambahkan `cryptoSymbol` ke props ---
+const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null, currency: Currency, cryptoSymbol: string }> = ({ result, idrRate, currency, cryptoSymbol }) => {
+    const [showHeatmap, setShowHeatmap] = useState(false);
+    // --- AKHIR PERUBAHAN ---
+
     const isLong = result.position === 'Long';
     const entry = parseAndConvertPrice(result.entryPrice, idrRate, currency);
     const stop = parseAndConvertPrice(result.stopLoss, idrRate, currency);
-    // --- PERUBAHAN DI SINI ---
-    const profit = parseAndConvertPrice(result.takeProfit, idrRate, currency); // Menggunakan takeProfit
-    // --- AKHIR PERUBAHAN ---
+    const profit = parseAndConvertPrice(result.takeProfit, idrRate, currency);
 
     const confidenceStyles: { [key: string]: string } = {
         High: 'bg-lime/20 text-lime',
@@ -133,21 +138,41 @@ const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null
                     <p className="text-xs text-gray-500">{stop.secondary}</p>
                 </div>
                 <div className="bg-white/5 p-1.5 rounded-lg">
-                    {/* --- PERUBAHAN DI SINI --- */}
                     <p className="text-xs font-medium text-gray-400">Take Profit</p>
-                    {/* --- AKHIR PERUBAHAN --- */}
                     <p className="text-xs font-semibold text-lime">{profit.primary}</p>
                      <p className="text-xs text-gray-500">{profit.secondary}</p>
                 </div>
             </div>
 
             <div>
-                 <div className="flex items-center gap-1.5 mb-1">
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-electric" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
-                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider font-heading">Kata RT pro trader AI:</h4>
-                </div>
-                <div className="bg-black/20 border-l-2 border-electric/50 p-2 rounded-r-lg">
-                    <p className="text-xs text-gray-300 leading-relaxed italic">{result.reasoning}</p>
+                 <div className="flex items-center justify-between gap-1.5 mb-1">
+                    <div className="flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-electric" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                        {/* --- PERUBAHAN DI SINI --- */}
+                        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider font-heading">
+                            {showHeatmap ? 'Chart 4 Jam (Live)' : 'Kata RT pro trader AI:'}
+                        </h4>
+                        {/* --- AKHIR PERUBAHAN --- */}
+                    </div>
+                    <button
+                        onClick={() => setShowHeatmap(!showHeatmap)}
+                        className="text-xs font-medium text-electric hover:text-electric/80 transition-colors px-2 py-0.5 rounded-md hover:bg-electric/10"
+                    >
+                        {showHeatmap ? 'Tutup Chart' : 'Lihat Chart'}
+                    </button>
+                 </div>
+
+                <div className="bg-black/20 border-l-2 border-electric/50 p-2 rounded-r-lg min-h-[100px] flex items-center justify-center">
+                    {/* --- PERUBAHAN DI SINI --- */}
+                    {showHeatmap ? (
+                        // Kirimkan simbol koin (tanpa 'USDT') ke komponen chart
+                        <RealtimeChart symbol={cryptoSymbol} />
+                    ) : (
+                        <p className="text-xs text-gray-300 leading-relaxed italic">
+                        {result.reasoning}
+                        </p>
+                    )}
+                    {/* --- AKHIR PERUBAHAN --- */}
                 </div>
             </div>
         </div>
@@ -246,7 +271,8 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                      <div className="flex items-center justify-center bg-black/20 rounded-lg p-2 min-h-[240px]">
                         {isLoading && <ProfitAnimation />}
                         {error && !isLoading && <ErrorDisplay title="Analisis Gagal" message={error} />}
-                        {analysisResult && !isLoading && <AnalysisContent result={analysisResult} idrRate={idrRate} currency={currency} />}
+                        {/* --- PERUBAHAN DI SINI: Kirim simbol koin ke AnalysisContent --- */}
+                        {analysisResult && !isLoading && <AnalysisContent result={analysisResult} idrRate={idrRate} currency={currency} cryptoSymbol={crypto.symbol} />}
                      </div>
                 </div>
 

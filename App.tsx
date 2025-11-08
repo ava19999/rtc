@@ -45,7 +45,7 @@ import {
   fetchNewsArticles,
   fetchTop500Coins,
   fetchTrendingCoins,
-  fetchCoinDetails
+  fetchCoinDetails // <-- IMPORT TAMBAHAN
 } from './services/mockData';
 import { ADMIN_USERNAMES } from './components/UserTag';
 import { database, getDatabaseInstance, testDatabaseConnection } from './services/firebaseService';
@@ -156,6 +156,10 @@ const AppContent: React.FC = () => {
   const [isTrendingLoading, setIsTrendingLoading] = useState(true);
   const [trendingError, setTrendingError] = useState<string | null>(null);
   const [searchedCoin, setSearchedCoin] = useState<CryptoData | null>(null);
+
+  // --- PERUBAHAN DI SINI: Tambah state untuk BTC ---
+  const [btcFetchedCoin, setBtcFetchedCoin] = useState<CryptoData | null>(null);
+  // --- AKHIR PERUBAHAN ---
   
   // --- PERUBAHAN DI SINI ---
   const [rooms, setRooms] = useState<Room[]>([
@@ -1007,6 +1011,23 @@ const AppContent: React.FC = () => {
 
   // Efek untuk mengambil data (API calls, dll)
   useEffect(() => { fetchTrendingData(); }, [fetchTrendingData]);
+
+  // --- PERUBAHAN DI SINI: Tambah useEffect untuk fetch BTC ---
+  useEffect(() => {
+    const fetchBtc = async () => {
+      try {
+        const btcData = await fetchCoinDetails('bitcoin');
+        setBtcFetchedCoin(btcData);
+      } catch (err) {
+        console.error("Gagal memuat data Bitcoin:", err);
+        // Jangan set trendingError di sini, biarkan trendingError
+        // khusus untuk daftar trending.
+      }
+    };
+    fetchBtc();
+  }, []); // Hanya dijalankan sekali saat mount
+  // --- AKHIR PERUBAHAN ---
+
   useEffect(() => {
     const getRate = async () => {
       setIsRateLoading(true);
@@ -1236,9 +1257,23 @@ const AppContent: React.FC = () => {
     return rooms.map(room => ({ ...room, userCount: roomUserCounts[room.id] || room.userCount || 0 }));
   }, [rooms, roomUserCounts]);
   const totalUsers = useMemo(() => updatedRooms.reduce((sum, r) => sum + (r.userCount || 0), 0), [updatedRooms]);
-  const heroCoin = useMemo(() => searchedCoin || trendingCoins[0] || null, [searchedCoin, trendingCoins]);
-  const otherTrendingCoins = useMemo(() => searchedCoin ? [] : trendingCoins.slice(1), [searchedCoin, trendingCoins]);
-  const hotCoinForHeader = useMemo(() => trendingCoins.length > 1 ? { name: trendingCoins[1].name, logo: trendingCoins[1].image, price: trendingCoins[1].price, change: trendingCoins[1].change } : null, [trendingCoins]);
+
+  // --- PERUBAHAN DI SINI: Modifikasi logika heroCoin dan otherTrendingCoins ---
+  const heroCoin = useMemo(() => searchedCoin || btcFetchedCoin || null, [searchedCoin, btcFetchedCoin]);
+  
+  const otherTrendingCoins = useMemo(() => {
+    if (searchedCoin) return []; // Sembunyikan 'Peluang Lain' saat mencari
+    // Tampilkan 10 koin trending, filter BTC jika ada di daftar trending
+    return trendingCoins.filter(coin => coin.id !== 'bitcoin').slice(0, 10);
+  }, [searchedCoin, trendingCoins]);
+  
+  const hotCoinForHeader = useMemo(() => {
+      // Ambil koin trending pertama yang BUKAN bitcoin (jika BTC adalah hero)
+      const hotCoin = trendingCoins.find(coin => coin.id !== 'bitcoin');
+      return hotCoin ? { name: hotCoin.name, logo: hotCoin.image, price: hotCoin.price, change: hotCoin.change } : null;
+  }, [trendingCoins]);
+  // --- AKHIR PERUBAHAN ---
+
   const currentTypingUsers = useMemo(() => {
     const currentRoomId = currentRoom?.id;
     if (!currentRoomId || !typingUsers || typeof typingUsers !== 'object') { return []; }
@@ -1268,9 +1303,9 @@ const AppContent: React.FC = () => {
                   fullCoinList={fullCoinList} 
                   isCoinListLoading={isCoinListLoading} 
                   coinListError={coinListError} 
-                  heroCoin={heroCoin} 
-                  otherTrendingCoins={otherTrendingCoins} 
-                  isTrendingLoading={isTrendingLoading} 
+                  heroCoin={heroCoin} // <-- Ini sekarang BTC atau hasil search
+                  otherTrendingCoins={otherTrendingCoins} // <-- Ini 10 koin trending
+                  isTrendingLoading={isTrendingLoading || (heroCoin === null && !searchedCoin)} // <-- Tampilkan loading jika BTC blm ke-load
                   trendingError={trendingError} 
                   onSelectCoin={handleSelectCoin} 
                   onReloadTrending={handleReloadPage} 

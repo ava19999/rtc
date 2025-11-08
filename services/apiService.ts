@@ -2,9 +2,7 @@
 
 export const CACHE_DURATION = {
   SHORT: 30 * 1000, // 30 detik
-  // --- PERUBAHAN DI SINI ---
-  DEFAULT: 1 * 60 * 1000, // 1 menit (diubah dari 2 menit)
-  // --- AKHIR PERUBAHAN ---
+  DEFAULT: 2 * 60 * 1000, // 2 menit
   NEWS: 20 * 60 * 1000, // 20 menit
   LONG: 60 * 60 * 1000, // 1 jam
 };

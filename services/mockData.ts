@@ -65,23 +65,41 @@ export const fetchTrendingCategories = async (): Promise<TrendingCategory[]> => 
         const top_3_coins: CategoryCoin[] = (category.top_3_coins || [])
             .slice(0, 3)
             .map((coinUrl: string) => {
-                // Ekstrak ID dan gambar dari URL (ini format aneh dari CoinGecko)
+                
+                // --- PERBAIKAN LOGIKA PARSING DI SINI ---
+                // Ekstrak ID API dari nama file gambar, bukan ID numerik
                 // Contoh: "https://assets.coingecko.com/coins/images/325/large/Tether.png?1696501661"
                 try {
-                    const parts = coinUrl.split('/');
-                    const id = parts[parts.length - 2];
                     const image = coinUrl;
+                    
+                    // 1. Dapatkan bagian terakhir: "Tether.png?1696501661"
+                    const fileNameWithQuery = coinUrl.split('/').pop(); 
+                    if (!fileNameWithQuery) return null;
 
-                    // Kita tidak mendapatkan nama/simbol di sini, jadi kita gunakan ID
+                    // 2. Pisahkan query string: "Tether.png"
+                    const fileName = fileNameWithQuery.split('?')[0];
+
+                    // 3. Hapus ekstensi: "Tether"
+                    const coinName = fileName.split('.').slice(0, -1).join('.'); 
+                    if (!coinName) return null;
+                    
+                    // 4. Ubah ke huruf kecil untuk ID API: "tether"
+                    const id = coinName.toLowerCase();
+
+                    // 5. Buat nama yang lebih baik: "Tether"
+                    const displayName = coinName.charAt(0).toUpperCase() + coinName.slice(1);
+
                     return {
-                        id: id, 
-                        symbol: id.toUpperCase(), 
-                        name: id.charAt(0).toUpperCase() + id.slice(1), 
+                        id: id, // id sekarang "tether" (BENAR)
+                        symbol: displayName.toUpperCase(), // Ini hanya untuk formalitas, tidak digunakan
+                        name: displayName, // name "Tether"
                         image: image
                     };
                 } catch (e) {
+                    console.error("Gagal parse URL koin kategori:", coinUrl, e);
                     return null; // Gagal parse, abaikan koin ini
                 }
+                // --- AKHIR PERBAIKAN LOGIKA ---
             })
             .filter((coin: CategoryCoin | null): coin is CategoryCoin => coin !== null);
 

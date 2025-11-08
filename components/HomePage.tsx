@@ -176,9 +176,11 @@ const HomePage: React.FC<HomePageProps> = ({
   const renderCategories = () => {
     if (isCategoriesLoading) {
       return (
+        // --- PERUBAHAN DI SINI: Ubah grid-cols-5 dan length 5 menjadi 10 ---
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mt-2">
-            {Array.from({ length: 5 }).map((_, index) => <SkeletonCategoryCard key={index} />)}
+            {Array.from({ length: 10 }).map((_, index) => <SkeletonCategoryCard key={index} />)}
         </div>
+        // --- AKHIR PERUBAHAN ---
       );
     }
 

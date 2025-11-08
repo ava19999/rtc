@@ -58,8 +58,9 @@ export const fetchTrendingCategories = async (): Promise<TrendingCategory[]> => 
         throw new Error("Data kategori tidak valid dari API");
     }
 
-    // Ambil 5 kategori teratas dan petakan ke tipe kita
-    return data.slice(0, 5).map((category: any): TrendingCategory => {
+    // --- PERUBAHAN DI SINI: Ambil 10 kategori teratas ---
+    return data.slice(0, 10).map((category: any): TrendingCategory => {
+    // --- AKHIR PERUBAHAN ---
         
         // Petakan 3 koin teratas
         const top_3_coins: CategoryCoin[] = (category.top_3_coins || [])

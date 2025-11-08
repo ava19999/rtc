@@ -68,22 +68,6 @@ export interface MarketDominance {
   alts: number;
 }
 
-// --- TAMBAHAN BARU: TIPE UNTUK KATEGORI ---
-export interface CategoryCoin {
-  id: string;
-  symbol: string;
-  name: string;
-  image: string;
-}
-
-export interface TrendingCategory {
-  id: string;
-  name: string;
-  top_3_coins: CategoryCoin[];
-}
-// --- AKHIR TAMBAHAN BARU ---
-
-
 // --- Forum Types ---
 export interface Room {
   id: string;

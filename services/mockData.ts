@@ -1,7 +1,7 @@
 import { COINGECKO_API_BASE_URL, NEWS_API_URL, MAJOR_EXCHANGES } from '../constants';
 // Fix: Imported CACHE_DURATION to resolve reference errors.
 import { apiRequest, CACHE_DURATION } from './apiService';
-import type { CoinListItem, CryptoData, ExchangeTicker, MarketDominance, NewsArticle } from '../types';
+import type { CoinListItem, CryptoData, ExchangeTicker, MarketDominance, NewsArticle, TrendingCategory, CategoryCoin } from '../types'; // <-- Tambahkan TrendingCategory & CategoryCoin
 
 // Memetakan respons API CoinGecko ke tipe CryptoData kita
 const mapCoinGeckoToCryptoData = (apiData: any): CryptoData => ({
@@ -47,6 +47,52 @@ export const fetchMarketDominance = async (): Promise<MarketDominance> => {
     const alts = 100 - btc - usdt;
     return { btc, usdt, alts };
 };
+
+// --- TAMBAHAN BARU: FUNGSI UNTUK MENGAMBIL KATEGORI ---
+export const fetchTrendingCategories = async (): Promise<TrendingCategory[]> => {
+    // Endpoint ini mengambil daftar kategori, diurutkan berdasarkan 24h market cap change
+    const url = `${COINGECKO_API_BASE_URL}/coins/categories`;
+    const data = await apiRequest(url, CACHE_DURATION.LONG); // Cache 1 jam
+
+    if (!Array.isArray(data)) {
+        throw new Error("Data kategori tidak valid dari API");
+    }
+
+    // Ambil 5 kategori teratas dan petakan ke tipe kita
+    return data.slice(0, 5).map((category: any): TrendingCategory => {
+        
+        // Petakan 3 koin teratas
+        const top_3_coins: CategoryCoin[] = (category.top_3_coins || [])
+            .slice(0, 3)
+            .map((coinUrl: string) => {
+                // Ekstrak ID dan gambar dari URL (ini format aneh dari CoinGecko)
+                // Contoh: "https://assets.coingecko.com/coins/images/325/large/Tether.png?1696501661"
+                try {
+                    const parts = coinUrl.split('/');
+                    const id = parts[parts.length - 2];
+                    const image = coinUrl;
+
+                    // Kita tidak mendapatkan nama/simbol di sini, jadi kita gunakan ID
+                    return {
+                        id: id, 
+                        symbol: id.toUpperCase(), 
+                        name: id.charAt(0).toUpperCase() + id.slice(1), 
+                        image: image
+                    };
+                } catch (e) {
+                    return null; // Gagal parse, abaikan koin ini
+                }
+            })
+            .filter((coin: CategoryCoin | null): coin is CategoryCoin => coin !== null);
+
+        return {
+            id: category.id,
+            name: category.name,
+            top_3_coins: top_3_coins,
+        };
+    });
+};
+// --- AKHIR TAMBAHAN BARU ---
 
 export const fetchTop500Coins = async (): Promise<CoinListItem[]> => {
     const url1 = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=false`;

@@ -2,12 +2,15 @@
 import React, { useState, useCallback, useRef, lazy, Suspense, useEffect } from 'react';
 import { fetchCryptoAnalysis } from '../services/geminiService';
 import CryptoCard from './CryptoCard';
-import type { HomePageProps, MarketDominance, CryptoData, AnalysisResult, ExchangeTicker, CoinListItem } from '../types';
+// --- PERUBAHAN DI SINI ---
+import type { HomePageProps, MarketDominance, CryptoData, AnalysisResult, ExchangeTicker, CoinListItem, TrendingCategory, CategoryCoin } from '../types';
+// --- AKHIR PERUBAHAN ---
 import HeroCoin from './HeroCoin';
 import DominanceTicker from './DominanceTicker';
 import {
   fetchMarketDominance,
   fetchExchangeTickers,
+  fetchTrendingCategories, // <-- IMPOR FUNGSI BARU
 } from '../services/mockData';
 
 const AnalysisModal = lazy(() => import('./AnalysisModal'));
@@ -51,6 +54,20 @@ const SkeletonCard = () => (
   </div>
 );
 
+// --- TAMBAHAN BARU: SKELETON UNTUK KATEGORI ---
+const SkeletonCategoryCard = () => (
+  <div className="bg-gray-900 border border-white/10 rounded-lg p-2.5 w-full flex-shrink-0 flex flex-col relative overflow-hidden">
+    <div className="h-4 w-1/2 bg-gray-700 rounded mb-2.5"></div>
+    <div className="flex items-center">
+      <div className="h-6 w-6 bg-gray-700 rounded-full z-10 border-2 border-gray-900"></div>
+      <div className="h-6 w-6 bg-gray-700 rounded-full -ml-2 z-0 border-2 border-gray-900"></div>
+    </div>
+    <div className="absolute top-0 left-0 w-full h-full skeleton-shimmer"></div>
+  </div>
+);
+// --- AKHIR TAMBAHAN BARU ---
+
+
 const HomePage: React.FC<HomePageProps> = ({ 
     idrRate, isRateLoading, currency, onIncrementAnalysisCount, 
     fullCoinList, isCoinListLoading, coinListError,
@@ -72,6 +89,12 @@ const HomePage: React.FC<HomePageProps> = ({
   const [filteredCoinList, setFilteredCoinList] = useState<CoinListItem[]>([]);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
+  // --- TAMBAHAN BARU: STATE UNTUK KATEGORI ---
+  const [trendingCategories, setTrendingCategories] = useState<TrendingCategory[]>([]);
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState(true);
+  // --- AKHIR TAMBAHAN BARU ---
+
+
   const fetchDominanceData = useCallback(async () => {
     setIsDominanceLoading(true);
     try {
@@ -84,9 +107,25 @@ const HomePage: React.FC<HomePageProps> = ({
     }
   }, []);
 
+  // --- TAMBAHAN BARU: FUNGSI UNTUK MENGAMBIL KATEGORI ---
+  const fetchCategoryData = useCallback(async () => {
+    setIsCategoriesLoading(true);
+    try {
+        const categories = await fetchTrendingCategories();
+        setTrendingCategories(categories);
+    } catch(err) {
+        console.error("Gagal memuat data kategori:", err);
+        // Tidak perlu set error utama, biarkan bagian ini tidak tampil
+    } finally {
+        setIsCategoriesLoading(false);
+    }
+  }, []);
+
   useEffect(() => { 
     fetchDominanceData();
-  }, [fetchDominanceData]);
+    fetchCategoryData(); // Panggil fungsi baru
+  }, [fetchDominanceData, fetchCategoryData]); // Tambahkan dependensi
+  // --- AKHIR TAMBAHAN BARU ---
 
   useEffect(() => {
     if (searchQuery.length > 0) {
@@ -133,6 +172,54 @@ const HomePage: React.FC<HomePageProps> = ({
 
   const closeModal = () => { setIsModalOpen(false); setSelectedCrypto(null); };
   
+  // --- TAMBAHAN BARU: FUNGSI UNTUK RENDER KATEGORI ---
+  const renderCategories = () => {
+    if (isCategoriesLoading) {
+      return (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mt-2">
+            {Array.from({ length: 5 }).map((_, index) => <SkeletonCategoryCard key={index} />)}
+        </div>
+      );
+    }
+
+    if (trendingCategories.length === 0) {
+      return null; // Jangan tampilkan apa-apa jika tidak ada kategori
+    }
+
+    return (
+      <div className="animate-fade-in-content">
+        <h3 className="text-base font-bold text-gray-300 mb-2 mt-4">Kategori Trending</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+          {trendingCategories.map(category => (
+            <div 
+              key={category.id} 
+              onClick={() => category.top_3_coins[0] && onSelectCoin(category.top_3_coins[0].id)}
+              className="bg-gray-900 border border-white/10 rounded-lg p-2.5 transition-all duration-300 hover:bg-electric/10 hover:border-electric/50 cursor-pointer group"
+              title={`Lihat ${category.top_3_coins[0]?.name || category.name}`}
+            >
+              <h4 className="text-xs font-semibold text-gray-200 truncate mb-2 group-hover:text-electric">{category.name}</h4>
+              <div className="flex items-center">
+                {category.top_3_coins.map((coin, index) => (
+                  <img 
+                    key={coin.id}
+                    src={coin.image} 
+                    alt={coin.name} 
+                    className={`h-6 w-6 rounded-full bg-gray-700 border-2 border-gray-900 ${index > 0 ? '-ml-2' : ''} z-${10 - index}`}
+                    title={coin.name}
+                  />
+                ))}
+                {category.top_3_coins.length === 0 && (
+                  <div className="h-6 w-6 rounded-full bg-gray-700 border-2 border-gray-900 opacity-50"></div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  // --- AKHIR TAMBAHAN BARU ---
+
   const renderContent = () => {
     if (isTrendingLoading) {
       return (
@@ -165,6 +252,9 @@ const HomePage: React.FC<HomePageProps> = ({
              </div>
           </div>
         )}
+        {/* --- TAMBAHAN BARU: RENDER KATEGORI DI SINI --- */}
+        {renderCategories()}
+        {/* --- AKHIR TAMBAHAN BARU --- */}
       </div>
     );
   }

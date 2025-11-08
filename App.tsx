@@ -54,8 +54,8 @@ import {
   query, orderByChild, equalTo // Pastikan query diimpor
 } from 'firebase/database';
 
-// --- PERUBAHAN DI SINI ---
-const DEFAULT_ROOM_IDS = ['berita-kripto', 'pengumuman-aturan', 'tanya-atmin'];
+// --- PERUBAHAN DI SINI (PERUBAHAN 1 DARI 3) ---
+const DEFAULT_ROOM_IDS = ['berita-kripto', 'pengumuman-aturan', 'tanya-atmin', 'peluang-baru'];
 // --- AKHIR PERUBAHAN ---
 
 const TYPING_TIMEOUT = 5000; // 5 detik
@@ -109,7 +109,7 @@ const Particles: React.FC = () => (
   </div>
 );
 
-// Helper function to update native app state for push notification suppression
+// Helper function untuk update native app state for push notification suppression
 const updateNativeRoomState = (roomId: string | null) => {
   // Memanggil bridge method yang ada di MainActivity
   if (typeof (window as any).AndroidBridge?.setCurrentRoomId === 'function') {
@@ -118,7 +118,7 @@ const updateNativeRoomState = (roomId: string | null) => {
   }
 };
 
-// Helper function to update native user state
+// Helper function untuk update native user state
 const updateNativeUserState = (userId: string | null) => {
   if (typeof (window as any).AndroidBridge?.setCurrentUserId === 'function') {
     (window as any).AndroidBridge.setCurrentUserId(userId || '');
@@ -126,7 +126,7 @@ const updateNativeUserState = (userId: string | null) => {
   }
 };
 
-// Helper function to update native sound settings
+// Helper function untuk update native sound settings
 const updateNativeSoundState = (enabled: boolean) => {
   if (typeof (window as any).AndroidBridge?.setNotificationSoundEnabled === 'function') {
     (window as any).AndroidBridge.setNotificationSoundEnabled(enabled);
@@ -161,11 +161,12 @@ const AppContent: React.FC = () => {
   const [btcFetchedCoin, setBtcFetchedCoin] = useState<CryptoData | null>(null);
   // --- AKHIR PERUBAHAN ---
   
-  // --- PERUBAHAN DI SINI ---
+  // --- PERUBAHAN DI SINI (PERUBAHAN 2 DARI 3) ---
   const [rooms, setRooms] = useState<Room[]>([
     { id: 'berita-kripto', name: 'Berita Kripto', userCount: 0, isDefaultRoom: true },
     { id: 'pengumuman-aturan', name: 'Pengumuman & Aturan', userCount: 0, isDefaultRoom: true },
-    { id: 'tanya-atmin', name: 'Tanya #atmin', userCount: 0, isDefaultRoom: true }
+    { id: 'tanya-atmin', name: 'Tanya #atmin', userCount: 0, isDefaultRoom: true },
+    { id: 'peluang-baru', name: '📈 Peluang Pasar (AI)', userCount: 0, isDefaultRoom: true } // <-- TAMBAHKAN INI
   ]);
   // --- AKHIR PERUBAHAN ---
   
@@ -1088,11 +1089,12 @@ const AppContent: React.FC = () => {
         });
         setRoomUserCounts(userCounts);
         
-        // --- PERUBAHAN DI SINI ---
+        // --- PERUBAHAN DI SINI (PERUBAHAN 3 DARI 3) ---
         const defaultRooms = [ 
           { id: 'berita-kripto', name: 'Berita Kripto', userCount: 0, isDefaultRoom: true }, 
           { id: 'pengumuman-aturan', name: 'Pengumuman & Aturan', userCount: 0, isDefaultRoom: true },
-          { id: 'tanya-atmin', name: 'Tanya #atmin', userCount: 0, isDefaultRoom: true }
+          { id: 'tanya-atmin', name: 'Tanya #atmin', userCount: 0, isDefaultRoom: true },
+          { id: 'peluang-baru', name: '📈 Peluang Pasar (AI)', userCount: 0, isDefaultRoom: true } // <-- TAMBAHKAN INI
         ];
         // --- AKHIR PERUBAHAN ---
 

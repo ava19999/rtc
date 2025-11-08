@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/checkTrendingCoins",
-      "schedule": "*/10 * * * *"
-    }
-  ]
-}

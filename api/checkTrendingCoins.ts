@@ -24,10 +24,7 @@ try {
 // --- Akhir Inisialisasi ---
 
 const DB_PATH = 'system_state/trending_coins_lastKnown';
-// --- PERUBAHAN DI SINI ---
-// Kita akan menggunakan ID room sebagai nama topik
 const TRENDING_ROOM_ID = 'peluang-baru'; 
-// --- AKHIR PERUBAHAN ---
 
 interface TrendingCoin {
   id: string;
@@ -44,45 +41,45 @@ async function fetchTrendingCoinsServerSide(): Promise<TrendingCoin[]> {
   const trendingCoins: TrendingCoin[] = trendingData.coins
     .map((c: any) => ({
       id: c.item.id,
-      name: c.item.name // <-- KITA AMBIL NAMANYA JUGA
+      name: c.item.name
     }))
     .slice(0, 11);
   return trendingCoins;
 }
 
-// --- FUNGSI BARU: Untuk mem-posting pesan ke dalam room ---
 async function postMessageToRoom(db: admin.database.Database, coinNames: string) {
   try {
     const messageListRef = db.ref(`messages/${TRENDING_ROOM_ID}`);
-    const newMessageRef = messageListRef.push(); // Buat ID unik baru
+    const newMessageRef = messageListRef.push(); 
     
-    // Kita buat sebagai pesan 'sistem' agar tampilannya berbeda
     const systemMessage = {
       type: 'system',
       text: `📈 Peluang Pasar Baru Terdeteksi: ${coinNames}`,
-      timestamp: admin.database.ServerValue.TIMESTAMP // Gunakan timestamp server
+      timestamp: admin.database.ServerValue.TIMESTAMP
     };
     
     await newMessageRef.set(systemMessage);
     console.log(`[checkTrendingCoins] Berhasil mem-posting pesan sistem ke room ${TRENDING_ROOM_ID}`);
   } catch (e) {
     console.error(`[checkTrendingCoins] Gagal mem-posting pesan ke room:`, (e as Error).message);
-    // Kita tidak menghentikan proses notifikasi jika ini gagal
   }
 }
-// --- AKHIR FUNGSI BARU ---
 
 export default async (req: VercelRequest, res: VercelResponse) => {
-  if (req.method !== 'POST') {
-    return res.status(405).send('Method Not Allowed');
+  // --- PERUBAHAN DI SINI ---
+  // Kita ubah dari POST ke GET, agar Uptime Robot bisa memanggilnya
+  if (req.method !== 'GET') {
+    return res.status(405).send('Method Not Allowed (Only GET accepted)');
   }
+  // --- AKHIR PERUBAHAN ---
+
   if (!admin.apps.length) {
     console.error('[checkTrendingCoins] Firebase Admin not initialized. Aborting.');
     return res.status(500).send('Firebase Admin not initialized');
   }
 
   try {
-    console.log('[checkTrendingCoins] Cron job started...');
+    console.log('[checkTrendingCoins] Cron job (Uptime Robot) started...');
     
     const newTrendingCoins = await fetchTrendingCoinsServerSide();
     if (newTrendingCoins.length === 0) {
@@ -118,23 +115,15 @@ export default async (req: VercelRequest, res: VercelResponse) => {
           body: body,
         },
         data: {
-          // --- PERUBAHAN DI SINI ---
-          // Kita buat seolah-olah notifikasi ini datang dari room 'peluang-baru'
           roomId: TRENDING_ROOM_ID, 
           roomName: "Peluang Baru",
           messageText: body,
           sender: "RT Crypto AI"
-          // --- AKHIR PERUBAHAN ---
         },
-        // --- PERUBAHAN DI SINI ---
-        topic: TRENDING_ROOM_ID // Kirim ke topik dengan nama ID room
-        // --- AKHIR PERUBAHAN ---
+        topic: TRENDING_ROOM_ID
       };
       
-      // 1. Kirim Notifikasi Push
       await admin.messaging().send(fcmMessage);
-      
-      // 2. Kirim Pesan ke Room
       await postMessageToRoom(db, coinNames);
       
       notificationSent = true;

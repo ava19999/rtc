@@ -1,0 +1,18 @@
+name: Trigger Vercel Cron
+
+on:
+  schedule:
+    # --- PERUBAHAN DI SINI ---
+    # Jalankan setiap 5 menit
+    - cron: '*/5 * * * *'
+  # (Ini juga menambahkan tombol 'Run workflow' manual di tab Actions GitHub)
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Vercel Function (Setiap 5 Menit)
+        # Memanggil URL Anda dengan metode GET
+        # Gunakan "secrets" agar URL Anda aman
+        run: curl -X GET "${{ secrets.VERCEL_CRON_URL }}"

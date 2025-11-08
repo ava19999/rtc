@@ -1,6 +1,9 @@
 // components/RealtimeChart.tsx
 import React, { useEffect, useRef, memo, useState } from 'react';
-import { createChart, IChartApi, ISeriesApi, ColorType } from 'lightweight-charts';
+// --- PERUBAHAN DI SINI ---
+// Kita hanya mengimpor TIPE, bukan fungsi `createChart`
+import type { IChartApi, ISeriesApi } from 'lightweight-charts';
+// --- AKHIR PERUBAHAN ---
 
 interface ChartProps {
   symbol: string; // Misal: "BTC"
@@ -41,10 +44,11 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
     // Pastikan kontainer ada
     if (!chartContainerRef.current) return;
     
-    // --- PERBAIKAN DI SINI: Solusi `setTimeout` ---
-    // Animasi modal induk adalah 300ms. Kita tunggu 350ms
-    // untuk memastikan <div> kontainer sudah memiliki ukuran.
-    const chartTimeout = setTimeout(() => {
+    // --- PERBAIKAN UTAMA: setTimeout 350ms ---
+    // Animasi modal induk adalah 300ms (0.3s).
+    // Kita tunggu 350ms untuk MEMASTIKAN animasi selesai
+    // dan div kontainer memiliki lebar (clientWidth) yang valid.
+    const chartTimeout = setTimeout(async () => {
         const chartContainer = chartContainerRef.current;
         if (!chartContainer) {
             console.warn("Kontainer chart hilang saat timeout.");
@@ -52,10 +56,10 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
             return;
         }
 
-        // Cek jika chart sudah dibuat (misal oleh render sebelumnya)
+        // Cek jika chart sudah dibuat
         if (chartRef.current) {
             console.log("Chart sudah ada, tidak membuat lagi.");
-            setIsLoading(false); // Pastikan loading dihentikan
+            setIsLoading(false);
             return;
         }
 
@@ -71,7 +75,13 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
         }
         
         try {
-            console.log(`Kontainer siap (W: ${width}, H: ${height}). Membuat chart.`);
+            console.log(`Kontainer siap (W: ${width}, H: ${height}). Mengimpor library chart...`);
+            
+            // 1. Impor library HANYA SETELAH container siap
+            const { createChart, ColorType } = await import('lightweight-charts');
+            console.log("Library chart berhasil diimpor. Membuat chart...");
+
+            // 2. Buat chart
             const chart = createChart(chartContainer, {
                 width,
                 height,
@@ -93,38 +103,45 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
                 },
             });
 
-            if (chart && typeof chart.addCandlestickSeries === 'function') {
-                chartRef.current = chart; // Simpan ref
-                
-                const series = chart.addCandlestickSeries({
-                    upColor: '#32CD32',
-                    downColor: '#FF00FF',
-                    borderDownColor: '#FF00FF',
-                    borderUpColor: '#32CD32',
-                    wickDownColor: '#FF00FF',
-                    wickUpColor: '#32CD32',
-                });
-                seriesRef.current = series;
-
-                fetchChartData(symbol, '4h').then(data => {
-                    if (data && data.length > 0) {
-                        series.setData(data);
-                        chart.timeScale().fitContent();
-                    } else {
-                        setError(`Data chart 4 jam tidak tersedia untuk ${symbol}USDT`);
-                    }
-                    setIsLoading(false); // Hentikan loading setelah data di-set
-                });
-
-            } else {
-                throw new Error("createChart gagal mengembalikan objek yang valid.");
+            if (!chart || typeof chart.addCandlestickSeries !== 'function') {
+                 throw new Error("createChart gagal mengembalikan objek yang valid.");
             }
+            
+            chartRef.current = chart; // Simpan ref
+            
+            // 3. Tambahkan series
+            const series = chart.addCandlestickSeries({
+                upColor: '#32CD32',
+                downColor: '#FF00FF',
+                borderDownColor: '#FF00FF',
+                borderUpColor: '#32CD32',
+                wickDownColor: '#FF00FF',
+                wickUpColor: '#32CD32',
+            });
+            seriesRef.current = series;
+            console.log("Series candlestick ditambahkan.");
+
+            // 4. Ambil data
+            console.log(`Mengambil data untuk ${symbol}USDT...`);
+            const data = await fetchChartData(symbol, '4h');
+            if (data && data.length > 0) {
+                series.setData(data);
+                chart.timeScale().fitContent();
+                console.log("Data chart berhasil di-set.");
+            } else {
+                setError(`Data chart 4 jam tidak tersedia untuk ${symbol}USDT`);
+            }
+
         } catch (err: any) {
             console.error("Gagal saat inisialisasi chart:", err);
             setError(err.message || "Gagal menginisialisasi chart. Coba lagi.");
+        } finally {
+            // 5. Selesai (baik sukses atau gagal)
             setIsLoading(false);
+            console.log("Loading chart selesai.");
         }
-    }, 350); // Timeout 350ms (sedikit lebih lama dari animasi modal 300ms)
+    }, 350); // Timeout 350ms
+    // --- AKHIR PERBAIKAN ---
 
     // Handle resize window
     const handleWindowResize = () => {
@@ -144,10 +161,7 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
         chartRef.current?.remove();
         chartRef.current = null;
     };
-  // --- PERBAIKAN KRUSIAL: Gunakan array kosong ---
-  // Ini memastikan useEffect berjalan SETIAP KALI komponen di-mount
-  // (setiap kali Anda klik "Lihat Chart")
-  }, []); 
+  }, []); // Array kosong, agar berjalan setiap kali di-mount
 
   if (error) {
       return (

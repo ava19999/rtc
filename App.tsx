@@ -1258,27 +1258,21 @@ const AppContent: React.FC = () => {
   }, [rooms, roomUserCounts]);
   const totalUsers = useMemo(() => updatedRooms.reduce((sum, r) => sum + (r.userCount || 0), 0), [updatedRooms]);
 
-  // --- PERBAIKAN DI SINI: Modifikasi logika heroCoin dan otherTrendingCoins ---
+  // --- PERUBAHAN DI SINI: Modifikasi logika heroCoin dan otherTrendingCoins ---
   const heroCoin = useMemo(() => searchedCoin || btcFetchedCoin || null, [searchedCoin, btcFetchedCoin]);
   
   const otherTrendingCoins = useMemo(() => {
-      // Dapatkan ID koin yang sedang ditampilkan sebagai hero
-      const heroCoinId = heroCoin?.id; 
-      
-      // Filter daftar trending:
-      // 1. Hapus koin apa pun yang saat ini menjadi hero.
-      // 2. Ambil 10 teratas.
-      return trendingCoins
-          .filter(coin => coin.id !== heroCoinId)
-          .slice(0, 10);
-  }, [trendingCoins, heroCoin]); // <-- Dependensi diubah ke trendingCoins and heroCoin
+    if (searchedCoin) return []; // Sembunyikan 'Peluang Lain' saat mencari
+    // Tampilkan 10 koin trending, filter BTC jika ada di daftar trending
+    return trendingCoins.filter(coin => coin.id !== 'bitcoin').slice(0, 10);
+  }, [searchedCoin, trendingCoins]);
   
   const hotCoinForHeader = useMemo(() => {
       // Ambil koin trending pertama yang BUKAN bitcoin (jika BTC adalah hero)
       const hotCoin = trendingCoins.find(coin => coin.id !== 'bitcoin');
       return hotCoin ? { name: hotCoin.name, logo: hotCoin.image, price: hotCoin.price, change: hotCoin.change } : null;
   }, [trendingCoins]);
-  // --- AKHIR PERBAIKAN ---
+  // --- AKHIR PERUBAHAN ---
 
   const currentTypingUsers = useMemo(() => {
     const currentRoomId = currentRoom?.id;
@@ -1311,9 +1305,7 @@ const AppContent: React.FC = () => {
                   coinListError={coinListError} 
                   heroCoin={heroCoin} // <-- Ini sekarang BTC atau hasil search
                   otherTrendingCoins={otherTrendingCoins} // <-- Ini 10 koin trending
-                  // --- PERBAIKAN LOGIKA LOADING ---
-                  isTrendingLoading={isTrendingLoading || (heroCoin === null)} 
-                  // --- AKHIR PERBAIKAN ---
+                  isTrendingLoading={isTrendingLoading || (heroCoin === null && !searchedCoin)} // <-- Tampilkan loading jika BTC blm ke-load
                   trendingError={trendingError} 
                   onSelectCoin={handleSelectCoin} 
                   onReloadTrending={handleReloadPage} 

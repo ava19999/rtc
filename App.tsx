@@ -1010,18 +1010,19 @@ const AppContent: React.FC = () => {
     return () => unsubscribe();
   }, [database, currentRoom, handleLogout]); // handleLogout ditambahkan sebagai dependency
 
-  // --- PERUBAHAN DI SINI: Atur timer 4 menit ---
   // Efek untuk mengambil data (API calls, dll)
   useEffect(() => {
     // 1. Panggil fetchTrendingData() saat pertama kali dimuat (dengan skeleton)
     fetchTrendingData(true);
 
-    // 2. Tentukan interval (4 menit)
-    const REFRESH_INTERVAL = 4 * 60 * 1000; // 4 menit = 240000 ms
+    // --- PERUBAHAN DI SINI ---
+    // 2. Tentukan interval (3 menit)
+    const REFRESH_INTERVAL = 3 * 60 * 1000; // 3 menit = 180000 ms
+    // --- AKHIR PERUBAHAN ---
 
     // 3. Atur interval untuk me-refresh data secara diam-diam
     const intervalId = setInterval(() => {
-      console.log("Memperbarui daftar trending (4 menit)...");
+      console.log("Memperbarui daftar trending (3 menit)...");
       // Panggil dengan 'false' agar tidak menampilkan skeleton loading
       fetchTrendingData(false); 
     }, REFRESH_INTERVAL);
@@ -1030,7 +1031,6 @@ const AppContent: React.FC = () => {
     return () => clearInterval(intervalId);
     
   }, [fetchTrendingData]); // Tetap gunakan fetchTrendingData sebagai dependency
-  // --- AKHIR PERUBAHAN ---
 
   useEffect(() => {
     const fetchBtc = async () => {
@@ -1276,14 +1276,8 @@ const AppContent: React.FC = () => {
   const heroCoin = useMemo(() => searchedCoin || btcFetchedCoin || null, [searchedCoin, btcFetchedCoin]);
   
   const otherTrendingCoins = useMemo(() => {
-    if (searchedCoin) return []; // Sembunyikan 'Peluang Lain' saat mencari
-    
-    // --- PERUBAHAN DI SINI ---
-    // Ubah .slice(0, 10) menjadi .slice(0, 15)
-    // Tampilkan 15 koin trending, filter BTC jika ada di daftar trending
+    if (searchedCoin) return []; 
     return trendingCoins.filter(coin => coin.id !== 'bitcoin').slice(0, 15);
-    // --- AKHIR PERUBAHAN ---
-    
   }, [searchedCoin, trendingCoins]);
   
   const hotCoinForHeader = useMemo(() => {

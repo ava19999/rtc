@@ -3,8 +3,8 @@ name: Trigger Vercel Cron
 on:
   schedule:
     # --- PERUBAHAN DI SINI ---
-    # Jalankan setiap 5 menit
-    - cron: '*/5 * * * *'
+    # Jalankan setiap 1 menit
+    - cron: '*/1 * * * *'
   # (Ini juga menambahkan tombol 'Run workflow' manual di tab Actions GitHub)
   workflow_dispatch:
 

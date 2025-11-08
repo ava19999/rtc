@@ -37,28 +37,37 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!chartContainerRef.current) return;
+
     // --- PERBAIKAN DI SINI ---
-    // Kita gunakan setTimeout 50ms. Ini menunda eksekusi
-    // hingga React selesai me-render ulang dan browser
-    // telah menghitung ukuran container h-[300px] yang baru.
+    // Animasi fade-in modal induknya adalah 300ms.
+    // Kita harus menunggu animasi itu selesai sebelum 
+    // kontainer ini memiliki lebar (clientWidth) yang valid.
+    // Kita set 350ms agar aman.
     const chartTimeout = setTimeout(() => {
-        if (!chartContainerRef.current) return;
+        if (!chartContainerRef.current) {
+            console.log("Kontainer chart hilang saat timeout, membatalkan.");
+            return;
+        }
 
         // Cek jika chart sudah ada, jangan buat lagi
-        if (chartRef.current) return;
-
+        if (chartRef.current) {
+            console.log("Chart sudah ada, tidak membuat lagi.");
+            return;
+        }
+        
         const containerWidth = chartContainerRef.current.clientWidth;
         const containerHeight = chartContainerRef.current.clientHeight;
 
-        // Penjaga: Pastikan kontainer memiliki lebar dan tinggi
+        // Penjaga: Pastikan kontainer memiliki ukuran yang valid
         if (containerWidth === 0 || containerHeight === 0) {
-            console.warn(`Ukuran kontainer tidak valid (W: ${containerWidth}, H: ${containerHeight}). Membatalkan render.`);
+            console.warn(`Ukuran kontainer tidak valid setelah timeout (W: ${containerWidth}, H: ${containerHeight}). Membatalkan render.`);
             setError("Gagal memuat chart. Coba buka-tutup modal.");
             return;
         }
 
         // Buat chart
-        chartRef.current = createChart(chartContainerRef.current, {
+        const chart = createChart(chartContainerRef.current, {
             width: containerWidth,
             height: containerHeight, // Gunakan tinggi dari kontainer
             layout: {
@@ -79,26 +88,35 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
             },
         });
 
-        // Tambahkan seri candlestick
-        seriesRef.current = chartRef.current.addCandlestickSeries({
-            upColor: '#32CD32', // Warna lime
-            downColor: '#FF00FF', // Warna magenta
-            borderDownColor: '#FF00FF',
-            borderUpColor: '#32CD32',
-            wickDownColor: '#FF00FF',
-            wickUpColor: '#32CD32',
-        });
+        // Penjaga: Cek apakah createChart mengembalikan objek yang valid
+        if (chart && typeof chart.addCandlestickSeries === 'function') {
+            chartRef.current = chart; // Simpan ref
 
-        // Ambil data saat komponen dimuat
-        fetchChartData(symbol, '4h').then(data => {
-            if (data && data.length > 0) {
-                seriesRef.current?.setData(data);
-                chartRef.current?.timeScale().fitContent();
-            } else {
-                setError(`Data chart 4 jam tidak tersedia untuk ${symbol}USDT`);
-            }
-        });
-    }, 50); // Timeout 50ms (lebih cepat dari 100ms, tapi cukup)
+            // Tambahkan seri candlestick
+            seriesRef.current = chart.addCandlestickSeries({
+                upColor: '#32CD32', // Warna lime
+                downColor: '#FF00FF', // Warna magenta
+                borderDownColor: '#FF00FF',
+                borderUpColor: '#32CD32',
+                wickDownColor: '#FF00FF',
+                wickUpColor: '#32CD32',
+            });
+
+            // Ambil data saat komponen dimuat
+            fetchChartData(symbol, '4h').then(data => {
+                if (data && data.length > 0) {
+                    seriesRef.current?.setData(data);
+                    chartRef.current?.timeScale().fitContent();
+                } else {
+                    setError(`Data chart 4 jam tidak tersedia untuk ${symbol}USDT`);
+                }
+            });
+        } else {
+             console.error("createChart gagal mengembalikan objek yang valid.");
+             setError("Gagal menginisialisasi chart. Coba lagi.");
+        }
+        
+    }, 350); // Timeout diubah ke 350ms
     // --- AKHIR PERBAIKAN ---
 
     // Handle resize
@@ -130,7 +148,7 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
       );
   }
 
-  // --- PERUBAHAN DI SINI: Ubah h-[300px] menjadi h-full ---
+  // Gunakan h-full agar pas dengan kontainer h-[300px] di AnalysisModal
   return <div ref={chartContainerRef} className="w-full h-full" />;
 };
 

@@ -41,8 +41,8 @@ export interface AnalysisResult {
   entryPrice: string;
   stopLoss: string;
   // --- PERUBAHAN DI SINI ---
-  takeProfit1: string; // Diubah dari takeProfit
-  takeProfit2?: string; // Ditambahkan (opsional)
+  takeProfit: string; // Diubah dari takeProfit1
+  // takeProfit2 dihapus
   // --- AKHIR PERUBAHAN ---
   confidence: string;
   reasoning: string;

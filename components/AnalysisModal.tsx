@@ -85,7 +85,7 @@ const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null
     const entry = parseAndConvertPrice(result.entryPrice, idrRate, currency);
     const stop = parseAndConvertPrice(result.stopLoss, idrRate, currency);
     // --- PERUBAHAN DI SINI ---
-    const profit = parseAndConvertPrice(result.takeProfit1, idrRate, currency); // Menggunakan takeProfit1
+    const profit = parseAndConvertPrice(result.takeProfit, idrRate, currency); // Menggunakan takeProfit
     // --- AKHIR PERUBAHAN ---
 
     const confidenceStyles: { [key: string]: string } = {
@@ -133,7 +133,9 @@ const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null
                     <p className="text-xs text-gray-500">{stop.secondary}</p>
                 </div>
                 <div className="bg-white/5 p-1.5 rounded-lg">
-                    <p className="text-xs font-medium text-gray-400">Ambil Untung</p>
+                    {/* --- PERUBAHAN DI SINI --- */}
+                    <p className="text-xs font-medium text-gray-400">Take Profit</p>
+                    {/* --- AKHIR PERUBAHAN --- */}
                     <p className="text-xs font-semibold text-lime">{profit.primary}</p>
                      <p className="text-xs text-gray-500">{profit.secondary}</p>
                 </div>

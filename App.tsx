@@ -56,10 +56,8 @@ import {
 
 const DEFAULT_ROOM_IDS = ['berita-kripto', 'pengumuman-aturan', 'tanya-atmin', 'peluang-baru'];
 
-// --- PERUBAHAN 1 DARI 2: Buat daftar pengecualian ---
 // Room ini TIDAK akan mendaftarkan push notification saat pertama kali join
 const NO_PUSH_NOTIFICATION_ROOMS = ['berita-kripto', 'pengumuman-aturan'];
-// --- AKHIR PERUBAHAN ---
 
 const TYPING_TIMEOUT = 5000; // 5 detik
 
@@ -284,7 +282,9 @@ const AppContent: React.FC = () => {
     
     updateNativeSoundState(enabled);
     
-    if (typeof (window as any).AndroidBridge?.subscribeToRoom === 'function' && !DEFAULT_ROOM_IDS.includes(roomId)) {
+    // Logika ini masih sama, mendaftarkan topik berdasarkan ID room
+    // Ini sekarang akan otomatis mencakup 'peluang-baru' karena kita mengubah logika di handleJoinRoom
+    if (typeof (window as any).AndroidBridge?.subscribeToRoom === 'function' && !NO_PUSH_NOTIFICATION_ROOMS.includes(roomId)) {
         if (enabled) {
             (window as any).AndroidBridge.subscribeToRoom(roomId);
             console.log(`[Bridge-FCM] Subscribed to topic for room: ${roomId}`);
@@ -297,7 +297,7 @@ const AppContent: React.FC = () => {
     if (currentRoom?.id === roomId) {
         updateNativeRoomState(roomId);
     }
-  }, [currentRoom]);
+  }, [currentRoom]); // (dependency handleToggleNotification tidak berubah)
 
   const fetchTrendingData = useCallback(async (showSkeleton = true) => {
     if (showSkeleton) { setIsTrendingLoading(true); setTrendingError(null); }
@@ -517,15 +517,13 @@ const AppContent: React.FC = () => {
     
     const notificationsEnabled = room.id ? (notificationSettings[room.id] !== false) : true;
     
-    // --- PERUBAHAN 2 DARI 2: Ubah logika subscribe ---
-    // Ganti `!DEFAULT_ROOM_IDS.includes(room.id)` dengan `!NO_PUSH_NOTIFICATION_ROOMS.includes(room.id)`
+    // Gunakan daftar `NO_PUSH_NOTIFICATION_ROOMS` yang baru
     if (typeof (window as any).AndroidBridge?.subscribeToRoom === 'function' && notificationsEnabled && !NO_PUSH_NOTIFICATION_ROOMS.includes(room.id)) {
       (window as any).AndroidBridge.subscribeToRoom(room.id);
       console.log(`[Bridge-FCM] Subscribed to topic: ${room.id} on join.`);
     } else {
          console.log(`[Bridge-FCM] Subscription skipped for room: ${room.id} (Disabled or in NO_PUSH list).`);
     }
-    // --- AKHIR PERUBAHAN ---
 
     const isFirstTimeJoin = !hasJoinedRoom[room.id];
     
@@ -1012,8 +1010,27 @@ const AppContent: React.FC = () => {
     return () => unsubscribe();
   }, [database, currentRoom, handleLogout]); // handleLogout ditambahkan sebagai dependency
 
+  // --- PERUBAHAN DI SINI: Atur timer 4 menit ---
   // Efek untuk mengambil data (API calls, dll)
-  useEffect(() => { fetchTrendingData(); }, [fetchTrendingData]);
+  useEffect(() => {
+    // 1. Panggil fetchTrendingData() saat pertama kali dimuat (dengan skeleton)
+    fetchTrendingData(true);
+
+    // 2. Tentukan interval (4 menit)
+    const REFRESH_INTERVAL = 4 * 60 * 1000; // 4 menit
+
+    // 3. Atur interval untuk me-refresh data secara diam-diam
+    const intervalId = setInterval(() => {
+      console.log("Memperbarui daftar trending (4 menit)...");
+      // Panggil dengan 'false' agar tidak menampilkan skeleton loading
+      fetchTrendingData(false); 
+    }, REFRESH_INTERVAL);
+
+    // 4. Bersihkan interval saat komponen di-unmount
+    return () => clearInterval(intervalId);
+    
+  }, [fetchTrendingData]); // Tetap gunakan fetchTrendingData sebagai dependency
+  // --- AKHIR PERUBAHAN ---
 
   useEffect(() => {
     const fetchBtc = async () => {

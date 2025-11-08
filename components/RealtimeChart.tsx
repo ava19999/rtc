@@ -38,34 +38,32 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
 
   useEffect(() => {
     // --- PERBAIKAN DI SINI ---
-    // Animasi fade-in modal adalah 400ms.
-    // Kita set timeout ke 450ms untuk memastikan animasi selesai
-    // dan div container memiliki lebar (clientWidth) yang valid.
+    // Kita gunakan setTimeout 50ms. Ini menunda eksekusi
+    // hingga React selesai me-render ulang dan browser
+    // telah menghitung ukuran container h-[300px] yang baru.
     const chartTimeout = setTimeout(() => {
-        if (!chartContainerRef.current) {
-            console.warn("Chart container ref hilang, membatalkan.");
-            return;
-        }
+        if (!chartContainerRef.current) return;
+
+        // Cek jika chart sudah ada, jangan buat lagi
+        if (chartRef.current) return;
 
         const containerWidth = chartContainerRef.current.clientWidth;
-        if (containerWidth === 0) {
-            console.warn("Lebar kontainer chart 0. Membatalkan render.");
+        const containerHeight = chartContainerRef.current.clientHeight;
+
+        // Penjaga: Pastikan kontainer memiliki lebar dan tinggi
+        if (containerWidth === 0 || containerHeight === 0) {
+            console.warn(`Ukuran kontainer tidak valid (W: ${containerWidth}, H: ${containerHeight}). Membatalkan render.`);
             setError("Gagal memuat chart. Coba buka-tutup modal.");
             return;
         }
 
-        if (chartRef.current) {
-            console.log("Chart sudah ada, tidak membuat lagi.");
-            return;
-        }
-
         // Buat chart
-        const chart = createChart(chartContainerRef.current, {
+        chartRef.current = createChart(chartContainerRef.current, {
             width: containerWidth,
-            height: 300, 
+            height: containerHeight, // Gunakan tinggi dari kontainer
             layout: {
                 background: { type: ColorType.Solid, color: 'transparent' },
-                textColor: '#D1D5DB',
+                textColor: '#D1D5DB', // Teks abu-abu
             },
             grid: {
                 vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
@@ -81,62 +79,59 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
             },
         });
 
-        // Cek apakah objek chart valid
-        if (chart && typeof chart.addCandlestickSeries === 'function') {
-            chartRef.current = chart; 
-            
-            seriesRef.current = chart.addCandlestickSeries({
-                upColor: '#32CD32',
-                downColor: '#FF00FF',
-                borderDownColor: '#FF00FF',
-                borderUpColor: '#32CD32',
-                wickDownColor: '#FF00FF',
-                wickUpColor: '#32CD32',
-            });
+        // Tambahkan seri candlestick
+        seriesRef.current = chartRef.current.addCandlestickSeries({
+            upColor: '#32CD32', // Warna lime
+            downColor: '#FF00FF', // Warna magenta
+            borderDownColor: '#FF00FF',
+            borderUpColor: '#32CD32',
+            wickDownColor: '#FF00FF',
+            wickUpColor: '#32CD32',
+        });
 
-            // Ambil data
-            fetchChartData(symbol, '4h').then(data => {
-                if (data && data.length > 0) {
-                    seriesRef.current?.setData(data);
-                    chartRef.current?.timeScale().fitContent();
-                } else {
-                    setError(`Data chart 4 jam tidak tersedia untuk ${symbol}USDT`);
-                }
-            });
-        } else {
-            console.error("Gagal membuat chart, objek tidak valid.", chart);
-            setError("Gagal menginisialisasi chart. Coba lagi.");
-        }
-        
-    }, 450); // Diubah ke 450ms untuk menunggu animasi selesai
+        // Ambil data saat komponen dimuat
+        fetchChartData(symbol, '4h').then(data => {
+            if (data && data.length > 0) {
+                seriesRef.current?.setData(data);
+                chartRef.current?.timeScale().fitContent();
+            } else {
+                setError(`Data chart 4 jam tidak tersedia untuk ${symbol}USDT`);
+            }
+        });
+    }, 50); // Timeout 50ms (lebih cepat dari 100ms, tapi cukup)
     // --- AKHIR PERBAIKAN ---
 
     // Handle resize
     const handleResize = () => {
         if (chartContainerRef.current && chartRef.current) {
-             chartRef.current.resize(chartContainerRef.current.clientWidth, 300);
+             // Sesuaikan ukuran chart jika window di-resize
+             chartRef.current.resize(
+                chartContainerRef.current.clientWidth, 
+                chartContainerRef.current.clientHeight
+             );
         }
     };
     window.addEventListener('resize', handleResize);
 
     // Cleanup
     return () => {
-        clearTimeout(chartTimeout); 
+        clearTimeout(chartTimeout); // Hapus timeout jika komponen unmount
         window.removeEventListener('resize', handleResize);
         chartRef.current?.remove();
         chartRef.current = null; // Reset ref
     };
-  }, [symbol]); 
+  }, [symbol]); // Tetap jalankan hanya saat simbol berubah
 
   if (error) {
       return (
-          <div className="w-full h-[300px] flex items-center justify-center text-center text-magenta text-xs p-4">
+          <div className="w-full h-full flex items-center justify-center text-center text-magenta text-xs p-4">
               {error}
           </div>
       );
   }
 
-  return <div ref={chartContainerRef} className="w-full h-[300px]" />;
+  // --- PERUBAHAN DI SINI: Ubah h-[300px] menjadi h-full ---
+  return <div ref={chartContainerRef} className="w-full h-full" />;
 };
 
 export default memo(RealtimeChart);

@@ -1,15 +1,11 @@
 // components/RealtimeChart.tsx
 import React, { useEffect, useRef, memo, useState } from 'react';
-// --- PERUBAHAN DI SINI ---
-// Kita hanya mengimpor TIPE, bukan fungsi `createChart`
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
-// --- AKHIR PERUBAHAN ---
 
 interface ChartProps {
-  symbol: string; // Misal: "BTC"
+  symbol: string;
 }
 
-// Fungsi untuk mengambil & memformat data dari API Binance
 async function fetchChartData(symbol: string, interval: string = '4h') {
     try {
         const response = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol.toUpperCase()}USDT&interval=${interval}&limit=500`);
@@ -17,11 +13,8 @@ async function fetchChartData(symbol: string, interval: string = '4h') {
             throw new Error('Data chart tidak ditemukan untuk simbol ini');
         }
         const data = await response.json();
-
-        // Format data agar sesuai dengan Lightweight Charts
-        // Data Binance: [time, open, high, low, close, ...]
         return data.map((d: any) => ({
-            time: (d[0] / 1000) as number, // Konversi milidetik ke detik
+            time: (d[0] / 1000),
             open: parseFloat(d[1]),
             high: parseFloat(d[2]),
             low: parseFloat(d[3]),
@@ -29,7 +22,7 @@ async function fetchChartData(symbol: string, interval: string = '4h') {
         }));
     } catch (error) {
         console.error("Gagal mengambil data chart:", error);
-        return null; // Kembalikan null jika gagal
+        return null;
     }
 }
 
@@ -38,17 +31,14 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Selalu mulai dengan loading
+  const [isLoading, setIsLoading] = useState(true);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Pastikan kontainer ada
     if (!chartContainerRef.current) return;
     
-    // --- PERBAIKAN UTAMA: setTimeout 350ms ---
-    // Animasi modal induk adalah 300ms (0.3s).
-    // Kita tunggu 350ms untuk MEMASTIKAN animasi selesai
-    // dan div kontainer memiliki lebar (clientWidth) yang valid.
-    const chartTimeout = setTimeout(async () => {
+    const initializeChart = async () => {
         const chartContainer = chartContainerRef.current;
         if (!chartContainer) {
             console.warn("Kontainer chart hilang saat timeout.");
@@ -56,10 +46,26 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
             return;
         }
 
-        // Cek jika chart sudah dibuat
-        if (chartRef.current) {
-            console.log("Chart sudah ada, tidak membuat lagi.");
-            setIsLoading(false);
+        // Cek jika chart sudah dibuat untuk simbol yang sama
+        if (chartRef.current && seriesRef.current) {
+            console.log("Chart sudah ada, memperbarui data...");
+            // Update data untuk simbol yang baru
+            try {
+                const data = await fetchChartData(symbol, '4h');
+                if (data && data.length > 0) {
+                    seriesRef.current.setData(data);
+                    chartRef.current.timeScale().fitContent();
+                    console.log("Data chart berhasil di-update.");
+                    setIsLoading(false);
+                } else {
+                    setError(`Data chart 4 jam tidak tersedia untuk ${symbol}USDT`);
+                    setIsLoading(false);
+                }
+            } catch (err) {
+                console.error("Gagal update data chart:", err);
+                setError("Gagal memperbarui data chart");
+                setIsLoading(false);
+            }
             return;
         }
 
@@ -77,7 +83,7 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
         try {
             console.log(`Kontainer siap (W: ${width}, H: ${height}). Mengimpor library chart...`);
             
-            // 1. Impor library HANYA SETELAH container siap
+            // 1. Impor library
             const { createChart, ColorType } = await import('lightweight-charts');
             console.log("Library chart berhasil diimpor. Membuat chart...");
 
@@ -107,7 +113,7 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
                  throw new Error("createChart gagal mengembalikan objek yang valid.");
             }
             
-            chartRef.current = chart; // Simpan ref
+            chartRef.current = chart;
             
             // 3. Tambahkan series
             const series = chart.addCandlestickSeries({
@@ -136,12 +142,13 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
             console.error("Gagal saat inisialisasi chart:", err);
             setError(err.message || "Gagal menginisialisasi chart. Coba lagi.");
         } finally {
-            // 5. Selesai (baik sukses atau gagal)
             setIsLoading(false);
             console.log("Loading chart selesai.");
         }
-    }, 350); // Timeout 350ms
-    // --- AKHIR PERBAIKAN ---
+    };
+
+    // Tunggu 350ms untuk memastikan animasi modal selesai
+    timeoutRef.current = setTimeout(initializeChart, 350);
 
     // Handle resize window
     const handleWindowResize = () => {
@@ -156,12 +163,20 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
 
     // Cleanup
     return () => {
-        clearTimeout(chartTimeout); // Wajib!
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+        }
         window.removeEventListener('resize', handleWindowResize);
-        chartRef.current?.remove();
-        chartRef.current = null;
+        
+        // Hanya hapus chart jika komponen benar-benar di-unmount
+        // Bukan ketika simbol berubah
+        if (chartRef.current) {
+            chartRef.current.remove();
+            chartRef.current = null;
+            seriesRef.current = null;
+        }
     };
-  }, []); // Array kosong, agar berjalan setiap kali di-mount
+  }, [symbol]); // ✅ TAMBAHKAN symbol SEBAGAI DEPENDENCY
 
   if (error) {
       return (
@@ -180,7 +195,6 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
      );
   }
 
-  // h-full akan mengambil tinggi dari parent-nya (yaitu h-[300px] di AnalysisModal)
   return <div ref={chartContainerRef} className="w-full h-full" />;
 };
 

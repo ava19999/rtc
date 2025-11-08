@@ -54,8 +54,11 @@ import {
   query, orderByChild, equalTo // Pastikan query diimpor
 } from 'firebase/database';
 
-// --- PERUBAHAN DI SINI (PERUBAHAN 1 DARI 3) ---
 const DEFAULT_ROOM_IDS = ['berita-kripto', 'pengumuman-aturan', 'tanya-atmin', 'peluang-baru'];
+
+// --- PERUBAHAN 1 DARI 2: Buat daftar pengecualian ---
+// Room ini TIDAK akan mendaftarkan push notification saat pertama kali join
+const NO_PUSH_NOTIFICATION_ROOMS = ['berita-kripto', 'pengumuman-aturan'];
 // --- AKHIR PERUBAHAN ---
 
 const TYPING_TIMEOUT = 5000; // 5 detik
@@ -157,18 +160,14 @@ const AppContent: React.FC = () => {
   const [trendingError, setTrendingError] = useState<string | null>(null);
   const [searchedCoin, setSearchedCoin] = useState<CryptoData | null>(null);
 
-  // --- PERUBAHAN DI SINI: Tambah state untuk BTC ---
   const [btcFetchedCoin, setBtcFetchedCoin] = useState<CryptoData | null>(null);
-  // --- AKHIR PERUBAHAN ---
   
-  // --- PERUBAHAN DI SINI (PERUBAHAN 2 DARI 3) ---
   const [rooms, setRooms] = useState<Room[]>([
     { id: 'berita-kripto', name: 'Berita Kripto', userCount: 0, isDefaultRoom: true },
     { id: 'pengumuman-aturan', name: 'Pengumuman & Aturan', userCount: 0, isDefaultRoom: true },
     { id: 'tanya-atmin', name: 'Tanya #atmin', userCount: 0, isDefaultRoom: true },
-    { id: 'peluang-baru', name: '📈 Peluang Pasar (AI)', userCount: 0, isDefaultRoom: true } // <-- TAMBAHKAN INI
+    { id: 'peluang-baru', name: '📈 Peluang Pasar (AI)', userCount: 0, isDefaultRoom: true } 
   ]);
-  // --- AKHIR PERUBAHAN ---
   
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [joinedRoomIds, setJoinedRoomIds] = useState<Set<string>>(() => {
@@ -518,12 +517,15 @@ const AppContent: React.FC = () => {
     
     const notificationsEnabled = room.id ? (notificationSettings[room.id] !== false) : true;
     
-    if (typeof (window as any).AndroidBridge?.subscribeToRoom === 'function' && notificationsEnabled && !DEFAULT_ROOM_IDS.includes(room.id)) {
+    // --- PERUBAHAN 2 DARI 2: Ubah logika subscribe ---
+    // Ganti `!DEFAULT_ROOM_IDS.includes(room.id)` dengan `!NO_PUSH_NOTIFICATION_ROOMS.includes(room.id)`
+    if (typeof (window as any).AndroidBridge?.subscribeToRoom === 'function' && notificationsEnabled && !NO_PUSH_NOTIFICATION_ROOMS.includes(room.id)) {
       (window as any).AndroidBridge.subscribeToRoom(room.id);
       console.log(`[Bridge-FCM] Subscribed to topic: ${room.id} on join.`);
     } else {
-         console.log(`[Bridge-FCM] Subscription skipped for room: ${room.id} (Disabled or Default).`);
+         console.log(`[Bridge-FCM] Subscription skipped for room: ${room.id} (Disabled or in NO_PUSH list).`);
     }
+    // --- AKHIR PERUBAHAN ---
 
     const isFirstTimeJoin = !hasJoinedRoom[room.id];
     
@@ -1013,7 +1015,6 @@ const AppContent: React.FC = () => {
   // Efek untuk mengambil data (API calls, dll)
   useEffect(() => { fetchTrendingData(); }, [fetchTrendingData]);
 
-  // --- PERUBAHAN DI SINI: Tambah useEffect untuk fetch BTC ---
   useEffect(() => {
     const fetchBtc = async () => {
       try {
@@ -1021,13 +1022,10 @@ const AppContent: React.FC = () => {
         setBtcFetchedCoin(btcData);
       } catch (err) {
         console.error("Gagal memuat data Bitcoin:", err);
-        // Jangan set trendingError di sini, biarkan trendingError
-        // khusus untuk daftar trending.
       }
     };
     fetchBtc();
-  }, []); // Hanya dijalankan sekali saat mount
-  // --- AKHIR PERUBAHAN ---
+  }, []); 
 
   useEffect(() => {
     const getRate = async () => {
@@ -1089,14 +1087,12 @@ const AppContent: React.FC = () => {
         });
         setRoomUserCounts(userCounts);
         
-        // --- PERUBAHAN DI SINI (PERUBAHAN 3 DARI 3) ---
         const defaultRooms = [ 
           { id: 'berita-kripto', name: 'Berita Kripto', userCount: 0, isDefaultRoom: true }, 
           { id: 'pengumuman-aturan', name: 'Pengumuman & Aturan', userCount: 0, isDefaultRoom: true },
           { id: 'tanya-atmin', name: 'Tanya #atmin', userCount: 0, isDefaultRoom: true },
-          { id: 'peluang-baru', name: '📈 Peluang Pasar (AI)', userCount: 0, isDefaultRoom: true } // <-- TAMBAHKAN INI
+          { id: 'peluang-baru', name: '📈 Peluang Pasar (AI)', userCount: 0, isDefaultRoom: true } 
         ];
-        // --- AKHIR PERUBAHAN ---
 
         const combinedRooms = [...defaultRooms, ...roomsArray.filter(r => !DEFAULT_ROOM_IDS.includes(r.id))];
         setRooms(combinedRooms);
@@ -1260,21 +1256,17 @@ const AppContent: React.FC = () => {
   }, [rooms, roomUserCounts]);
   const totalUsers = useMemo(() => updatedRooms.reduce((sum, r) => sum + (r.userCount || 0), 0), [updatedRooms]);
 
-  // --- PERUBAHAN DI SINI: Modifikasi logika heroCoin dan otherTrendingCoins ---
   const heroCoin = useMemo(() => searchedCoin || btcFetchedCoin || null, [searchedCoin, btcFetchedCoin]);
   
   const otherTrendingCoins = useMemo(() => {
-    if (searchedCoin) return []; // Sembunyikan 'Peluang Lain' saat mencari
-    // Tampilkan 10 koin trending, filter BTC jika ada di daftar trending
+    if (searchedCoin) return []; 
     return trendingCoins.filter(coin => coin.id !== 'bitcoin').slice(0, 10);
   }, [searchedCoin, trendingCoins]);
   
   const hotCoinForHeader = useMemo(() => {
-      // Ambil koin trending pertama yang BUKAN bitcoin (jika BTC adalah hero)
       const hotCoin = trendingCoins.find(coin => coin.id !== 'bitcoin');
       return hotCoin ? { name: hotCoin.name, logo: hotCoin.image, price: hotCoin.price, change: hotCoin.change } : null;
   }, [trendingCoins]);
-  // --- AKHIR PERUBAHAN ---
 
   const currentTypingUsers = useMemo(() => {
     const currentRoomId = currentRoom?.id;
@@ -1305,9 +1297,9 @@ const AppContent: React.FC = () => {
                   fullCoinList={fullCoinList} 
                   isCoinListLoading={isCoinListLoading} 
                   coinListError={coinListError} 
-                  heroCoin={heroCoin} // <-- Ini sekarang BTC atau hasil search
-                  otherTrendingCoins={otherTrendingCoins} // <-- Ini 10 koin trending
-                  isTrendingLoading={isTrendingLoading || (heroCoin === null && !searchedCoin)} // <-- Tampilkan loading jika BTC blm ke-load
+                  heroCoin={heroCoin}
+                  otherTrendingCoins={otherTrendingCoins}
+                  isTrendingLoading={isTrendingLoading || (heroCoin === null && !searchedCoin)}
                   trendingError={trendingError} 
                   onSelectCoin={handleSelectCoin} 
                   onReloadTrending={handleReloadPage} 
@@ -1351,7 +1343,6 @@ const AppContent: React.FC = () => {
         </>
       );
     } else if (currentUser && !currentUser.username) {
-      // Ini seharusnya tidak terjadi lagi dengan logika RTDB yang baru, tapi sebagai penjaga
       console.warn('User logged in but missing username, showing CreateIdPage again.');
       if (currentUser.googleProfilePicture && currentUser.email) {
         contentToRender = <CreateIdPage onProfileComplete={handleProfileComplete} googleProfile={{ email: currentUser.email, name: currentUser.email, picture: currentUser.googleProfilePicture }} />;
@@ -1361,7 +1352,6 @@ const AppContent: React.FC = () => {
         contentToRender = <LoginPage onGoogleRegisterSuccess={handleGoogleRegisterSuccess} />;
       }
     } else {
-      // Ini adalah state normal saat onAuthStateChanged sedang memeriksa RTDB
       console.log("[Render] Waiting for RTDB user profile lookup...");
       return <div className="min-h-screen bg-transparent text-white flex items-center justify-center">Mengambil profil Anda...</div>;
     }

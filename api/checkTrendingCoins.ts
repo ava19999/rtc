@@ -1,13 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import admin from 'firebase-admin';
 
-// --- PERUBAHAN 1: HAPUS BARIS IMPORT INI ---
-// import { COINGECKO_API_BASE_URL } from '../constants'; 
-
-// --- PERUBAHAN 2: TAMBAHKAN KONSTANTA LANGSUNG DI SINI ---
+// --- KONSTANTA DISALIN LANGSUNG ---
 const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3';
-// --- AKHIR PERUBAHAN ---
-
 
 // --- Inisialisasi Firebase Admin ---
 const serviceAccountJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
@@ -44,12 +39,17 @@ async function fetchTrendingCoinsServerSide(): Promise<TrendingCoin[]> {
     throw new Error(`[checkTrendingCoins] Gagal mengambil data trending: ${response.statusText}`);
   }
   const trendingData = await response.json();
+  
+  // --- PERUBAHAN DI SINI ---
+  // Ubah .slice(0, 11) menjadi .slice(0, 16)
   const trendingCoins: TrendingCoin[] = trendingData.coins
     .map((c: any) => ({
       id: c.item.id,
       name: c.item.name
     }))
-    .slice(0, 11);
+    .slice(0, 16);
+  // --- AKHIR PERUBAHAN ---
+    
   return trendingCoins;
 }
 

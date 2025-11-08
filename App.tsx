@@ -297,7 +297,7 @@ const AppContent: React.FC = () => {
     if (currentRoom?.id === roomId) {
         updateNativeRoomState(roomId);
     }
-  }, [currentRoom]); // (dependency handleToggleNotification tidak berubah)
+  }, [currentRoom]);
 
   const fetchTrendingData = useCallback(async (showSkeleton = true) => {
     if (showSkeleton) { setIsTrendingLoading(true); setTrendingError(null); }
@@ -1017,7 +1017,7 @@ const AppContent: React.FC = () => {
     fetchTrendingData(true);
 
     // 2. Tentukan interval (4 menit)
-    const REFRESH_INTERVAL = 4 * 60 * 1000; // 4 menit
+    const REFRESH_INTERVAL = 4 * 60 * 1000; // 4 menit = 240000 ms
 
     // 3. Atur interval untuk me-refresh data secara diam-diam
     const intervalId = setInterval(() => {
@@ -1276,8 +1276,14 @@ const AppContent: React.FC = () => {
   const heroCoin = useMemo(() => searchedCoin || btcFetchedCoin || null, [searchedCoin, btcFetchedCoin]);
   
   const otherTrendingCoins = useMemo(() => {
-    if (searchedCoin) return []; 
-    return trendingCoins.filter(coin => coin.id !== 'bitcoin').slice(0, 10);
+    if (searchedCoin) return []; // Sembunyikan 'Peluang Lain' saat mencari
+    
+    // --- PERUBAHAN DI SINI ---
+    // Ubah .slice(0, 10) menjadi .slice(0, 15)
+    // Tampilkan 15 koin trending, filter BTC jika ada di daftar trending
+    return trendingCoins.filter(coin => coin.id !== 'bitcoin').slice(0, 15);
+    // --- AKHIR PERUBAHAN ---
+    
   }, [searchedCoin, trendingCoins]);
   
   const hotCoinForHeader = useMemo(() => {

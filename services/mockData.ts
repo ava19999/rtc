@@ -28,13 +28,17 @@ export const fetchTrendingCoins = async (): Promise<CryptoData[]> => {
     const trendingData = await apiRequest(trendingUrl, CACHE_DURATION.DEFAULT);
     
     // --- PERUBAHAN DI SINI ---
-    // Ubah .slice(0, 7) menjadi .slice(0, 11) untuk mengambil 11 koin
-    const trendingIds = trendingData.coins.map((c: any) => c.item.id).slice(0, 11).join(',');
+    // Ubah .slice(0, 11) menjadi .slice(0, 16) untuk mengambil 16 koin
+    const trendingIds = trendingData.coins.map((c: any) => c.item.id).slice(0, 16).join(',');
     // --- AKHIR PERUBAHAN ---
 
     if (!trendingIds) return [];
 
-    const coinsUrl = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&ids=${trendingIds}&order=market_cap_desc&per_page=11&page=1&sparkline=true&price_change_percentage=24h`;
+    // --- PERUBAHAN DI SINI ---
+    // Ubah per_page=11 menjadi per_page=16
+    const coinsUrl = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&ids=${trendingIds}&order=market_cap_desc&per_page=16&page=1&sparkline=true&price_change_percentage=24h`;
+    // --- AKHIR PERUBAHAN ---
+    
     const coinsData = await apiRequest(coinsUrl, CACHE_DURATION.DEFAULT);
     return coinsData.map(mapCoinGeckoToCryptoData);
 };

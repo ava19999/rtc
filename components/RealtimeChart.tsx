@@ -1,9 +1,7 @@
 // components/RealtimeChart.tsx
 import React, { useEffect, useRef, memo, useState } from 'react';
-// --- PERUBAHAN DI SINI ---
 // Kita hanya mengimpor TIPE, bukan fungsi `createChart`
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
-// --- AKHIR PERUBAHAN ---
 
 interface ChartProps {
   symbol: string; // Misal: "BTC"
@@ -41,6 +39,7 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
   const [isLoading, setIsLoading] = useState(true); // Tambahkan state loading
 
   useEffect(() => {
+    // Pastikan kontainer ada
     if (!chartContainerRef.current) return;
     
     let chart: IChartApi | null = null;
@@ -58,10 +57,8 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
             resizeObserver.disconnect();
             
             try {
-                // --- PERUBAHAN UTAMA: DYNAMIC IMPORT ---
                 // Impor library HANYA SETELAH container siap
                 const { createChart, ColorType } = await import('lightweight-charts');
-                // --- AKHIR PERUBAHAN ---
 
                 chart = createChart(chartContainer, {
                     width,
@@ -109,7 +106,6 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
                         setIsLoading(false);
                     }
                 } else {
-                    // Ini seharusnya tidak terjadi lagi, tapi sebagai penjaga
                     throw new Error("createChart gagal mengembalikan objek yang valid.");
                 }
             } catch (err: any) {
@@ -141,7 +137,12 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
         chartRef.current?.remove();
         chartRef.current = null;
     };
-  }, [symbol]); // Tetap jalankan hanya saat simbol berubah
+  // --- PERUBAHAN KRUSIAL DI SINI ---
+  // Ubah dari [symbol] menjadi [] (array kosong)
+  // Ini memastikan useEffect berjalan SETIAP KALI komponen di-mount,
+  // bukan hanya saat 'symbol' berubah.
+  }, []); 
+  // --- AKHIR PERUBAHAN ---
 
   if (error) {
       return (

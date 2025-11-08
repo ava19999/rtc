@@ -1,7 +1,6 @@
 // components/RealtimeChart.tsx
 import React, { useEffect, useRef, memo, useState } from 'react';
-// Kita hanya mengimpor TIPE, bukan fungsi `createChart`
-import type { IChartApi, ISeriesApi } from 'lightweight-charts';
+import { createChart, IChartApi, ISeriesApi, ColorType } from 'lightweight-charts';
 
 interface ChartProps {
   symbol: string; // Misal: "BTC"
@@ -36,90 +35,98 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Tambahkan state loading
+  const [isLoading, setIsLoading] = useState(true); // Selalu mulai dengan loading
 
   useEffect(() => {
     // Pastikan kontainer ada
     if (!chartContainerRef.current) return;
     
-    let chart: IChartApi | null = null;
-    const chartContainer = chartContainerRef.current;
+    // --- PERBAIKAN DI SINI: Solusi `setTimeout` ---
+    // Animasi modal induk adalah 300ms. Kita tunggu 350ms
+    // untuk memastikan <div> kontainer sudah memiliki ukuran.
+    const chartTimeout = setTimeout(() => {
+        const chartContainer = chartContainerRef.current;
+        if (!chartContainer) {
+            console.warn("Kontainer chart hilang saat timeout.");
+            setIsLoading(false);
+            return;
+        }
 
-    const resizeObserver = new ResizeObserver(async (entries) => {
-        const entry = entries[0];
-        if (!entry) return;
+        // Cek jika chart sudah dibuat (misal oleh render sebelumnya)
+        if (chartRef.current) {
+            console.log("Chart sudah ada, tidak membuat lagi.");
+            setIsLoading(false); // Pastikan loading dihentikan
+            return;
+        }
 
-        const { width, height } = entry.contentRect;
+        const width = chartContainer.clientWidth;
+        const height = chartContainer.clientHeight;
 
-        // Cek jika ukuran valid DAN chart belum dibuat
-        if (width > 0 && height > 0 && !chartRef.current) {
-            // Kita hanya ingin ini berjalan SEKALI.
-            resizeObserver.disconnect();
-            
-            try {
-                // Impor library HANYA SETELAH container siap
-                const { createChart, ColorType } = await import('lightweight-charts');
+        // Penjaga: Pastikan kontainer memiliki ukuran
+        if (width === 0 || height === 0) {
+            console.error(`Gagal membuat chart: Ukuran kontainer tidak valid (W: ${width}, H: ${height})`);
+            setError("Gagal memuat chart. Coba buka-tutup modal.");
+            setIsLoading(false);
+            return;
+        }
+        
+        try {
+            console.log(`Kontainer siap (W: ${width}, H: ${height}). Membuat chart.`);
+            const chart = createChart(chartContainer, {
+                width,
+                height,
+                layout: {
+                    background: { type: ColorType.Solid, color: 'transparent' },
+                    textColor: '#D1D5DB',
+                },
+                grid: {
+                    vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                    horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                },
+                timeScale: {
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+                rightPriceScale: {
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                },
+            });
 
-                chart = createChart(chartContainer, {
-                    width,
-                    height,
-                    layout: {
-                        background: { type: ColorType.Solid, color: 'transparent' },
-                        textColor: '#D1D5DB',
-                    },
-                    grid: {
-                        vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
-                        horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
-                    },
-                    timeScale: {
-                        borderColor: 'rgba(255, 255, 255, 0.2)',
-                        timeVisible: true,
-                        secondsVisible: false,
-                    },
-                    rightPriceScale: {
-                        borderColor: 'rgba(255, 255, 255, 0.2)',
-                    },
-                });
+            if (chart && typeof chart.addCandlestickSeries === 'function') {
+                chartRef.current = chart; // Simpan ref
                 
-                // Cek apakah createChart berhasil
-                if (chart && typeof chart.addCandlestickSeries === 'function') {
-                    chartRef.current = chart; // Simpan ref
-                    
-                    const series = chart.addCandlestickSeries({
-                        upColor: '#32CD32',
-                        downColor: '#FF00FF',
-                        borderDownColor: '#FF00FF',
-                        borderUpColor: '#32CD32',
-                        wickDownColor: '#FF00FF',
-                        wickUpColor: '#32CD32',
-                    });
-                    seriesRef.current = series;
+                const series = chart.addCandlestickSeries({
+                    upColor: '#32CD32',
+                    downColor: '#FF00FF',
+                    borderDownColor: '#FF00FF',
+                    borderUpColor: '#32CD32',
+                    wickDownColor: '#FF00FF',
+                    wickUpColor: '#32CD32',
+                });
+                seriesRef.current = series;
 
-                    // Ambil data
-                    const data = await fetchChartData(symbol, '4h');
+                fetchChartData(symbol, '4h').then(data => {
                     if (data && data.length > 0) {
                         series.setData(data);
                         chart.timeScale().fitContent();
-                        setIsLoading(false); // Sembunyikan loading
                     } else {
                         setError(`Data chart 4 jam tidak tersedia untuk ${symbol}USDT`);
-                        setIsLoading(false);
                     }
-                } else {
-                    throw new Error("createChart gagal mengembalikan objek yang valid.");
-                }
-            } catch (err: any) {
-                console.error("Gagal saat inisialisasi chart:", err);
-                setError(err.message || "Gagal menginisialisasi chart. Coba lagi.");
-                setIsLoading(false);
+                    setIsLoading(false); // Hentikan loading setelah data di-set
+                });
+
+            } else {
+                throw new Error("createChart gagal mengembalikan objek yang valid.");
             }
+        } catch (err: any) {
+            console.error("Gagal saat inisialisasi chart:", err);
+            setError(err.message || "Gagal menginisialisasi chart. Coba lagi.");
+            setIsLoading(false);
         }
-    });
+    }, 350); // Timeout 350ms (sedikit lebih lama dari animasi modal 300ms)
 
-    // Mulai amati kontainer
-    resizeObserver.observe(chartContainer);
-
-    // Handle resize window (terpisah dari setup awal)
+    // Handle resize window
     const handleWindowResize = () => {
         if (chartRef.current && chartContainerRef.current) {
              chartRef.current.resize(
@@ -132,17 +139,15 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
 
     // Cleanup
     return () => {
-        resizeObserver.disconnect();
+        clearTimeout(chartTimeout); // Wajib!
         window.removeEventListener('resize', handleWindowResize);
         chartRef.current?.remove();
         chartRef.current = null;
     };
-  // --- PERUBAHAN KRUSIAL DI SINI ---
-  // Ubah dari [symbol] menjadi [] (array kosong)
-  // Ini memastikan useEffect berjalan SETIAP KALI komponen di-mount,
-  // bukan hanya saat 'symbol' berubah.
+  // --- PERBAIKAN KRUSIAL: Gunakan array kosong ---
+  // Ini memastikan useEffect berjalan SETIAP KALI komponen di-mount
+  // (setiap kali Anda klik "Lihat Chart")
   }, []); 
-  // --- AKHIR PERUBAHAN ---
 
   if (error) {
       return (
@@ -152,7 +157,6 @@ const RealtimeChart: React.FC<ChartProps> = ({ symbol }) => {
       );
   }
   
-  // Tampilkan loading spinner saat chart/data sedang disiapkan
   if (isLoading) {
      return (
         <div className="w-full h-full flex flex-col items-center justify-center space-y-1.5">

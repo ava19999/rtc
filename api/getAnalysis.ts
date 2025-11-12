@@ -1,127 +1,265 @@
 // api/getAnalysis.ts
-// Impor tipe Handler dari Vercel (atau gunakan 'any' jika tidak menginstal @vercel/node)
 import type { VercelRequest, VercelResponse } from '@vercel/node'; 
 import { GoogleGenAI, Type } from "@google/genai";
-// Pastikan path ke file types.ts Anda benar dari folder /api
-import type { AnalysisResult } from '../types'; 
+import admin from 'firebase-admin';
+// Impor tipe baru dari file types
+import type { AnalysisResult, TradePlan } from '../types'; 
+
+// --- Inisialisasi Firebase Admin ---
+const serviceAccountJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+const databaseURL = process.env.FIREBASE_DATABASE_URL;
+
+try {
+  if (!admin.apps.length && serviceAccountJson) {
+    const serviceAccount = JSON.parse(serviceAccountJson);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      databaseURL: databaseURL,
+    });
+    console.log('[getAnalysis] Firebase Admin SDK Initialized.');
+  } else if (!serviceAccountJson) {
+    console.error('[getAnalysis] GOOGLE_APPLICATION_CREDENTIALS_JSON env var is not set.');
+  }
+} catch (e: any) {
+  console.error('[getAnalysis] Firebase Admin Initialization Error', e.message);
+}
+// --- Akhir Inisialisasi ---
+
 
 // 1. AMBIL API KEY DARI VERCEL ENVIRONMENT VARIABLES (AMAN)
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 
-// 2. SKEMA DATA UTAMA (TETAP FOKUS PADA HARGA SAAT INI - TIDAK DIUBAH)
-const analysisSchema = {
+// --- PERUBAHAN SKEMA DIMULAI ---
+
+// 2. Skema untuk satu rencana trading (TradePlan)
+const tradePlanSchema = {
   type: Type.OBJECT,
   properties: {
-    position: {
-      type: Type.STRING,
-      description: 'The recommended trading position, either "Long" or "Short".'
+    position: { 
+      type: Type.STRING, 
+      description: 'The recommended trading position, either "Long" or "Short".' 
     },
-    entryPrice: {
-      type: Type.STRING,
-      // Data utama adalah untuk HARGA SAAT INI
-      description: 'The recommended entry price based on the CURRENT MARKET PRICE, or a very tight range around it. Return ONLY the number or range (e.g., "68000-68100" or "67000"), WITHOUT any currency symbols like $.',
+    entryPrice: { 
+      type: Type.STRING, 
+      description: 'The recommended entry price. Return ONLY the number or range (e.g., "68000-68100" or "67000"), WITHOUT any currency symbols like $.'
     },
-    stopLoss: {
-      type: Type.STRING,
-      description: 'The recommended price for a stop-loss (relative to the entryPrice). Return ONLY the number (e.g., "67000"), WITHOUT any currency symbols like $.',
+    stopLoss: { 
+      type: Type.STRING, 
+      description: 'The recommended stop-loss price. Return ONLY the number (e.g., "67000"), WITHOUT any currency symbols like $.'
     },
-    takeProfit: {
-        type: Type.STRING,
-        description: 'The recommended take-profit target (relative to the entryPrice). Return ONLY the number (e.g., "72000"), WITHOUT any currency symbols like $.',
+    takeProfit: { 
+      type: Type.STRING, 
+      description: 'The recommended take-profit target. Return ONLY the number (e.g., "72000"), WITHOUT any currency symbols like $.'
     },
-    confidence: {
-      type: Type.STRING,
-      description: 'The confidence level for the CURRENT MARKET PRICE plan (e.g., "High", "Medium", "Low").',
+    confidence: { 
+      type: Type.STRING, 
+      description: 'The confidence level (e.g., "High", "Medium", "Low").'
+    },
+  },
+  required: ['position', 'entryPrice', 'stopLoss', 'takeProfit', 'confidence'],
+};
+
+// 3. Skema untuk meminta KEDUA rencana (Cache Tidak Valid)
+const fullAnalysisSchema = {
+  type: Type.OBJECT,
+  properties: {
+    bestOption: {
+      ...tradePlanSchema,
+      description: "The high-probability, high R:R, 'best price' limit order plan. This is the plan to be cached."
+    },
+    currentPricePlan: {
+      ...tradePlanSchema,
+      description: "The trade plan for entering at the current market price."
     },
     reasoning: {
       type: Type.STRING,
-      // Deskripsi reasoning diubah untuk mencerminkan urutan BARU
-      description: 'A brief rationale starting with the "OPSI ENTRY TERBAIK", followed by the "ANALISIS HARGA SAAT INI".',
+      description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain its risks, SL, and TP. DO NOT mention the 'bestOption' here."
     },
   },
-  required: ['position', 'entryPrice', 'stopLoss', 'takeProfit', 'confidence', 'reasoning'],
+  required: ['bestOption', 'currentPricePlan', 'reasoning'],
 };
 
-// 3. Buat handler untuk Vercel
+// 4. Skema untuk meminta HANYA rencana harga saat ini (Cache Valid)
+const currentPriceOnlySchema = {
+    type: Type.OBJECT,
+    properties: {
+      currentPricePlan: {
+        ...tradePlanSchema,
+        description: "The trade plan for entering at the current market price."
+      },
+      reasoning: {
+        type: Type.STRING,
+        description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain its risks, SL, and TP."
+      },
+    },
+    required: ['currentPricePlan', 'reasoning'],
+};
+
+// --- PERUBAHAN SKEMA SELESAI ---
+
+
+// Fungsi helper untuk memanggil AI
+async function callGemini(prompt: string, schema: any) {
+  const response = await ai.models.generateContent({
+    model: 'gemini-flash-latest',
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: schema as any,
+      temperature: 0.3,
+    },
+  });
+
+  const jsonString = (response.text ?? '').trim();
+  if (!jsonString) {
+    throw new Error("Respons AI kosong.");
+  }
+  return JSON.parse(jsonString);
+}
+
+
+// 5. Buat handler untuk Vercel
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  // Hanya izinkan metode POST
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
   try {
-    // 4. Ambil data dari body permintaan (client)
-    const { cryptoName, currentPrice } = req.body;
+    // 6. Ambil data dari body, tambahkan cryptoId
+    const { cryptoName, currentPrice, cryptoId } = req.body;
 
-    if (!cryptoName || currentPrice === undefined) {
-      return res.status(400).json({ error: 'cryptoName dan currentPrice diperlukan' });
+    if (!cryptoName || currentPrice === undefined || !cryptoId) {
+      return res.status(400).json({ error: 'cryptoName, currentPrice, dan cryptoId diperlukan' });
     }
     
-    // 5. Pastikan API Key ada di server
     if (!process.env.API_KEY) {
-        throw new Error("Kunci API Gemini tidak dikonfigurasi di Vercel.");
-    }
-
-    // 6. --- PROMPT DIPERBARUI: FOKUS "CUKUP KUAT & PROFIT PASTI" ---
-    const formattedPrice = currentPrice < 0.01 ? currentPrice.toFixed(8) : currentPrice.toFixed(4);
-    const prompt = `
-    Persona Anda: 'RTC Pro Trader AI'. Anda adalah analis teknikal *dedicated* dari RTC. Misi Anda adalah menganalisis chart dengan **sangat teliti** untuk menemukan *setup* profit konsisten. Anda adalah *trader* konservatif yang fokus pada manajemen risiko dan *high-probability setup*. Nada bicara Anda profesional, lugas, *to the point*, dan penuh dedikasi.
-
-    Harga saat ini untuk ${cryptoName} adalah **$${formattedPrice}**.
-
-    **Prinsip Utama (WAJIB DIPATUHI):**
-    1.  **Waspada Psikologi Pasar:** Selalu hitung psikologi pasar. Analisis HARUS mendeteksi "fakeouts", "stop loss hunt", dan "bull/bear traps". Jangan tertipu oleh pergerakan chart yang tidak valid.
-    2.  **Konfirmasi Wajib:** Sinyal wajib divalidasi dengan **Volume** dan **S/R kuat**.
-    3.  **Rencana Utama (Harga Saat Ini):** Data JSON utama (\`entryPrice\`, \`stopLoss\`, \`takeProfit\`) HARUS untuk rencana masuk di **$${formattedPrice}**.
-    4.  **Rencana Opsi (Harga Terbaik):** Rencana *limit order* yang lebih *high-probability* akan dibahas di *reasoning*.
-
-    **Kerangka Analisis Wajib (Teliti):**
-    1.  **Analisis Harga Saat Ini (Rencana Utama):**
-        * Tentukan rencana paling logis (Long/Short) jika masuk di **$${formattedPrice}**.
-        * Tentukan \`entryPrice\` (sebagai $${formattedPrice}), \`stopLoss\` (ketat), dan \`takeProfit\` (konservatif) untuk rencana ini. Data ini akan mengisi data JSON utama.
-        * Jika masuk di harga saat ini terlalu berisiko (misal: "nanggung" atau di tengah *range*), atur \`confidence\` ke "Low".
-    2.  **Analisis Harga Terbaik (Rencana Opsi - AKURAT & PASTI):**
-        * Cari "harga terbaik" (Limit Order) yang konservatif dan memiliki R:R (Risk:Reward) terbaik untuk **profit yang paling pasti**.
-        * Ini berarti **menunggu *pullback* atau *retest* ke level S/R yang dinilai **PALING KUAT & AKURAT** (bukan *harus* yang terdekat, tapi yang paling *valid* dan *high-probability*).** Level ini harus **MASUK AKAL** untuk ditunggu.
-        * Rencana "harga terbaik" ini HANYA akan dimasukkan ke bagian *atas* dari \`reasoning\`.
-
-    **Format Output:**
-    -   Ikuti skema JSON yang disediakan dengan ketat.
-    -   \`entryPrice\`, \`stopLoss\`, \`takeProfit\`: HARUS mencerminkan RENCANA UTAMA (berdasarkan harga saat ini $${formattedPrice}).
-    -   \`confidence\`: "High", "Medium", atau "Low" untuk RENCANA UTAMA (harga saat ini).
-    -   \`reasoning\`: (Gunakan bahasa Indonesia yang profesional, lugas, dan *clear*).
-        1.  **Bagian Pertama (DI ATAS):** Mulai dengan *heading* "**OPSI ENTRY TERBAIK:**". Jelaskan rencana *limit order* (rencana 'tunggu') yang paling aman, **akurat**, dan *high-probability* ini. Fokus pada *level* kunci yang **paling kuat** yang divalidasi (S/R kuat, konfirmasi volume). Ini adalah rencana yang "bertahan hingga SL atau TP tercapai".
-        2.  **Bagian Kedua (DI BAWAH):** Tambahkan *heading* "**ANALISIS HARGA SAAT INI:**".
-        3.  Di bagian ini, jelaskan rencana untuk masuk di harga saat ini ($${formattedPrice}), yang datanya ada di JSON utama. Jelaskan risiko dan alasan SL/TP-nya secara *clear* dan *to the point*. Jelaskan kenapa *setup* ini adalah cara paling aman untuk "mengamankan profit" jika tidak mau menunggu Opsi Terbaik.
-  `;
-    // --- AKHIR DARI PROMPT ---
-
-    // 7. Panggil API Gemini (secara aman di server)
-    const response = await ai.models.generateContent({
-      model: 'gemini-flash-latest',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: analysisSchema as any,
-        // --- PERBAIKAN DI SINI ---
-        // Mengubah suhu ke 0.3 sesuai permintaan Anda
-        temperature: 0.3, 
-      },
-    });
-
-    const jsonString = (response.text ?? '').trim();
-    if (!jsonString) {
-      throw new Error("Respons AI kosong.");
+      throw new Error("Kunci API Gemini tidak dikonfigurasi di Vercel.");
     }
     
-    const result = JSON.parse(jsonString) as AnalysisResult;
+    if (!admin.apps.length) {
+        throw new Error("Firebase Admin SDK tidak terinisialisasi.");
+    }
 
-    // 8. Kembalikan hasil ke client
-    return res.status(200).json(result);
+    const formattedPrice = currentPrice < 0.01 ? currentPrice.toFixed(8) : currentPrice.toFixed(4);
+    const db = admin.database();
+    const cachePath = `analysis_cache/${cryptoId}`;
+    const cacheRef = db.ref(cachePath);
+    let isCacheValid = false;
+    let cachedBestOption: TradePlan | null = null;
+
+    // --- LOGIKA CACHE ---
+    try {
+        const snapshot = await cacheRef.once('value');
+        const cachedData: TradePlan | null = snapshot.val();
+
+        if (cachedData) {
+            console.log(`[getAnalysis] Cache ditemukan untuk ${cryptoId}. Memvalidasi...`);
+            const currentPriceNum = parseFloat(currentPrice);
+            const sl = parseFloat(cachedData.stopLoss.replace(/[^0-9.-]+/g,""));
+            const tp = parseFloat(cachedData.takeProfit.replace(/[^0-9.-]+/g,""));
+
+            if (isNaN(sl) || isNaN(tp)) {
+                 console.warn(`[getAnalysis] Cache ${cryptoId} SL/TP tidak valid.`);
+                 isCacheValid = false;
+            } else if (cachedData.position === 'Long' && (currentPriceNum <= sl || currentPriceNum >= tp)) {
+                 console.log(`[getAnalysis] Cache ${cryptoId} (Long) TIDAK VALID. Harga: ${currentPriceNum}, SL: ${sl}, TP: ${tp}`);
+                 isCacheValid = false;
+            } else if (cachedData.position === 'Short' && (currentPriceNum >= sl || currentPriceNum <= tp)) {
+                 console.log(`[getAnalysis] Cache ${cryptoId} (Short) TIDAK VALID. Harga: ${currentPriceNum}, SL: ${sl}, TP: ${tp}`);
+                 isCacheValid = false;
+            } else {
+                 console.log(`[getAnalysis] Cache ${cryptoId} VALID.`);
+                 isCacheValid = true;
+                 cachedBestOption = cachedData;
+            }
+        } else {
+            console.log(`[getAnalysis] Tidak ada cache untuk ${cryptoId}.`);
+            isCacheValid = false;
+        }
+    } catch (e) {
+         console.error(`[getAnalysis] Error membaca cache Firebase:`, (e as Error).message);
+         isCacheValid = false;
+    }
+    // --- AKHIR LOGIKA CACHE ---
+
+
+    if (isCacheValid && cachedBestOption) {
+      // --- KASUS 1: CACHE VALID ---
+      // Minta HANYA 'currentPricePlan' dan 'reasoning'-nya
+      
+      const promptCurrentOnly = `
+        Persona: 'RTC Pro Trader AI'. Fokus pada high-probability setup dan konservatif.
+        Harga ${cryptoName} saat ini: **$${formattedPrice}**.
+        
+        TUGAS:
+        1.  **Rencana 'Harga Saat Ini' (untuk 'currentPricePlan'):**
+            * Tentukan rencana paling logis (Long/Short) jika harus masuk SEKARANG di **$${formattedPrice}**.
+            * Tentukan: \`position\`, \`entryPrice\` (gunakan $${formattedPrice}), \`stopLoss\`, \`takeProfit\`, \`confidence\`.
+            * Jika masuk sekarang sangat berisiko, set \`confidence\` ke "Low".
+        2.  **Penjelasan (untuk 'reasoning'):**
+            * Berikan penjelasan SINGKAT dan LUGAS dalam Bahasa Indonesia *hanya* untuk 'Rencana Harga Saat Ini' di atas.
+      `;
+      
+      console.log(`[getAnalysis] Cache VALID. Meminta AI HANYA untuk rencana harga saat ini...`);
+      const freshData = await callGemini(promptCurrentOnly, currentPriceOnlySchema);
+
+      const finalResult: AnalysisResult = {
+        bestOption: cachedBestOption,
+        currentPricePlan: freshData.currentPricePlan,
+        reasoning: freshData.reasoning,
+        isCachedData: true
+      };
+
+      return res.status(200).json(finalResult);
+
+    } else {
+      // --- KASUS 2: CACHE TIDAK VALID / KOSONG ---
+      // Minta KEDUA rencana
+      
+      const promptFull = `
+        Persona: 'RTC Pro Trader AI'. Fokus pada high-probability setup, konservatif, dan manajemen risiko.
+        Harga ${cryptoName} saat ini: **$${formattedPrice}**.
+
+        TUGAS ANDA:
+        Anda HARUS menghasilkan DUA rencana trading terpisah dalam format JSON yang diminta.
+
+        1.  **Rencana 'Opsi Terbaik' (untuk \`bestOption\`):**
+            * Cari "harga terbaik" (Limit Order) yang paling high-probability, konservatif, dan R:R terbaik untuk profit paling pasti.
+            * Ini adalah level S/R KUNCI yang valid dan kuat, yang masuk akal untuk ditunggu (pullback/retest).
+            * Tentukan: \`position\`, \`entryPrice\` (harga limit order), \`stopLoss\`, \`takeProfit\`, \`confidence\` untuk rencana ini.
+
+        2.  **Rencana 'Harga Saat Ini' (untuk \`currentPricePlan\`):**
+            * Tentukan rencana paling logis (Long/Short) jika harus masuk SEKARANG di **$${formattedPrice}**.
+            * Tentukan: \`position\`, \`entryPrice\` (gunakan $${formattedPrice}), \`stopLoss\`, \`takeProfit\`, \`confidence\` untuk rencana ini.
+
+        3.  **Penjelasan (untuk \`reasoning\`):**
+            * Berikan penjelasan SINGKAT dan LUGAS dalam Bahasa Indonesia *hanya* untuk 'Rencana Harga Saat Ini' (poin 2).
+            * JANGAN sebutkan 'Opsi Terbaik' di dalam reasoning.
+      `;
+
+      console.log(`[getAnalysis] Cache TIDAK VALID. Meminta AI untuk KEDUA rencana...`);
+      const fullResult = await callGemini(promptFull, fullAnalysisSchema) as Omit<AnalysisResult, 'isCachedData'>;
+
+      // Simpan 'bestOption' yang baru ke cache
+      try {
+        await cacheRef.set(fullResult.bestOption);
+        console.log(`[getAnalysis] 'bestOption' baru disimpan ke cache untuk ${cryptoId}.`);
+      } catch (e) {
+        console.error(`[getAnalysis] GAGAL menyimpan 'bestOption' ke cache:`, (e as Error).message);
+        // Jangan hentikan proses, kirim saja datanya
+      }
+      
+      const finalResult: AnalysisResult = {
+        ...fullResult,
+        isCachedData: false // Tandai bahwa ini adalah data baru
+      };
+
+      return res.status(200).json(finalResult);
+    }
 
   } catch (error) {
     console.error("Error di Vercel function (api/getAnalysis):", error);

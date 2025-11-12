@@ -1,6 +1,8 @@
 // HomePage.tsx
 import React, { useState, useCallback, useRef, lazy, Suspense, useEffect } from 'react';
+// --- PERUBAHAN DIMULAI ---
 import { fetchCryptoAnalysis } from '../services/geminiService';
+// --- AKHIR PERUBAHAN ---
 import CryptoCard from './CryptoCard';
 import type { HomePageProps, MarketDominance, CryptoData, AnalysisResult, ExchangeTicker, CoinListItem } from '../types';
 import HeroCoin from './HeroCoin';
@@ -120,8 +122,11 @@ const HomePage: React.FC<HomePageProps> = ({
     setIsAnalysisLoading(true); setAnalysisError(null); setAnalysisResult(null);
     setIsTickersLoading(true); setTickersError(null); setExchangeTickers([]);
 
-    fetchCryptoAnalysis(crypto.name, crypto.price)
+    // --- PERUBAHAN DIMULAI ---
+    // Sekarang kita juga mengirimkan crypto.id
+    fetchCryptoAnalysis(crypto.name, crypto.price, crypto.id)
       .then(setAnalysisResult)
+    // --- AKHIR PERUBAHAN ---
       .catch(err => setAnalysisError(err.message))
       .finally(() => setIsAnalysisLoading(false));
     

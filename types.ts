@@ -36,17 +36,32 @@ export interface CryptoData {
   market_cap: number;
 }
 
-export interface AnalysisResult {
+// --- PERUBAHAN DIMULAI ---
+
+/**
+ * Mewakili satu rencana trading lengkap.
+ */
+export interface TradePlan {
   position: 'Long' | 'Short';
   entryPrice: string;
   stopLoss: string;
-  // --- PERUBAHAN DI SINI ---
-  takeProfit: string; // Diubah dari takeProfit1
-  // takeProfit2 dihapus
-  // --- AKHIR PERUBAHAN ---
+  takeProfit: string;
   confidence: string;
-  reasoning: string;
 }
+
+/**
+ * Hasil analisis AI yang diperbarui.
+ * 'bestOption' adalah rencana limit order (di-cache).
+ * 'currentPricePlan' adalah rencana market order (selalu fresh).
+ */
+export interface AnalysisResult {
+  bestOption: TradePlan;
+  currentPricePlan: TradePlan;
+  reasoning: string; // Deskripsi ini HANYA untuk 'currentPricePlan'
+  isCachedData: boolean; // Flag untuk UI: true jika 'bestOption' dari cache
+}
+// --- PERUBAHAN SELESAI ---
+
 
 export interface ExchangeTicker {
   name: string;

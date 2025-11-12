@@ -1,6 +1,8 @@
 // AnalysisModal.tsx
 import React, { useState } from 'react';
-import type { AnalysisModalProps, AnalysisResult, Currency, ExchangeTicker } from '../types';
+// --- PERUBAHAN DIMULAI ---
+import type { AnalysisModalProps, AnalysisResult, Currency, ExchangeTicker, TradePlan } from '../types';
+// --- AKHIR PERUBAHAN ---
 
 const formatUsd = (price: number): string => {
   return new Intl.NumberFormat('en-US', {
@@ -80,25 +82,52 @@ const ErrorDisplay = ({ title, message }: { title: string, message: string }) =>
     </div>
 );
 
-const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null, currency: Currency }> = ({ result, idrRate, currency }) => {
-    const isLong = result.position === 'Long';
-    const entry = parseAndConvertPrice(result.entryPrice, idrRate, currency);
-    const stop = parseAndConvertPrice(result.stopLoss, idrRate, currency);
-    // --- PERUBAHAN DI SINI ---
-    const profit = parseAndConvertPrice(result.takeProfit, idrRate, currency); // Menggunakan takeProfit
-    // --- AKHIR PERUBAHAN ---
+// --- PERUBAHAN DIMULAI ---
+
+/**
+ * Sub-komponen baru untuk menampilkan satu rencana trading.
+ */
+const PlanDisplay: React.FC<{ 
+  plan: TradePlan, 
+  title: string, 
+  idrRate: number | null, 
+  currency: Currency, 
+  isCached?: boolean 
+}> = ({ plan, title, idrRate, currency, isCached }) => {
+    
+    const { position, entryPrice, stopLoss, takeProfit, confidence } = plan;
+    const isLong = position === 'Long';
+    
+    const entry = parseAndConvertPrice(entryPrice, idrRate, currency);
+    const stop = parseAndConvertPrice(stopLoss, idrRate, currency);
+    const profit = parseAndConvertPrice(takeProfit, idrRate, currency);
 
     const confidenceStyles: { [key: string]: string } = {
         High: 'bg-lime/20 text-lime',
         Medium: 'bg-electric/20 text-electric',
         Low: 'bg-yellow-500/20 text-yellow-400',
     };
-    const confidenceText = result.confidence || 'N/A';
+    const confidenceText = confidence || 'N/A';
     const styleClass = confidenceStyles[confidenceText] || 'bg-white/10 text-gray-100';
 
     return (
-        <div className="space-y-2.5 w-full animate-fade-in-content" style={{ animation: 'fade-in-content 0.4s ease-out forwards' }}>
-            <div className={`relative p-2.5 rounded-lg overflow-hidden ${isLong ? 'bg-gradient-to-br from-lime/20 to-lime/5' : 'bg-gradient-to-br from-magenta/20 to-magenta/5'}`}>
+        <div className="space-y-2.5 w-full">
+            {/* Judul Rencana dan Badge Cache */}
+            <div className="flex items-center justify-between gap-2">
+                <h4 className="text-sm font-bold text-gray-200">{title}</h4>
+                {isCached !== undefined && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        isCached 
+                            ? 'bg-electric/20 text-electric' 
+                            : 'bg-lime/20 text-lime'
+                    }`}>
+                        {isCached ? 'Dari Cache' : 'Analisis Baru'}
+                    </span>
+                )}
+            </div>
+            
+            {/* Detail Posisi dan Keyakinan */}
+            <div className={`relative p-2.5 rounded-lg ${isLong ? 'bg-gradient-to-br from-lime/10 to-lime/5' : 'bg-gradient-to-br from-magenta/10 to-magenta/5'}`}>
                  <div className="flex items-center justify-between gap-2.5">
                     <div className="flex items-center gap-2.5">
                         <div className={`flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${isLong ? 'bg-lime/20 text-lime' : 'bg-magenta/20 text-magenta'}`}>
@@ -110,7 +139,7 @@ const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null
                         <div>
                             <p className="text-xs font-medium text-gray-400">Rekomendasi Posisi</p>
                             <p className={`text-lg font-black ${isLong ? 'text-lime' : 'text-magenta'}`}>
-                                {result.position}
+                                {position}
                             </p>
                         </div>
                     </div>
@@ -121,6 +150,7 @@ const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null
                 </div>
             </div>
 
+            {/* Harga-harga */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-center">
                 <div className="bg-white/5 p-1.5 rounded-lg">
                     <p className="text-xs font-medium text-gray-400">Harga Masuk</p>
@@ -133,26 +163,61 @@ const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null
                     <p className="text-xs text-gray-500">{stop.secondary}</p>
                 </div>
                 <div className="bg-white/5 p-1.5 rounded-lg">
-                    {/* --- PERUBAHAN DI SINI --- */}
                     <p className="text-xs font-medium text-gray-400">Take Profit</p>
-                    {/* --- AKHIR PERUBAHAN --- */}
                     <p className="text-xs font-semibold text-lime">{profit.primary}</p>
                      <p className="text-xs text-gray-500">{profit.secondary}</p>
-                </div>
-            </div>
-
-            <div>
-                 <div className="flex items-center gap-1.5 mb-1">
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-electric" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
-                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider font-heading">Kata RT pro trader AI:</h4>
-                </div>
-                <div className="bg-black/20 border-l-2 border-electric/50 p-2 rounded-r-lg">
-                    <p className="text-xs text-gray-300 leading-relaxed italic">{result.reasoning}</p>
                 </div>
             </div>
         </div>
     );
 };
+
+
+/**
+ * Konten utama modal, sekarang menampilkan DUA rencana.
+ */
+const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null, currency: Currency }> = ({ result, idrRate, currency }) => {
+    const { bestOption, currentPricePlan, reasoning, isCachedData } = result;
+
+    return (
+        <div className="space-y-4 w-full animate-fade-in-content" style={{ animation: 'fade-in-content 0.4s ease-out forwards' }}>
+            
+            {/* 1. Tampilkan Opsi Terbaik */}
+            <PlanDisplay 
+                plan={bestOption} 
+                title="Opsi Entry Terbaik (Limit)" 
+                idrRate={idrRate} 
+                currency={currency} 
+                isCached={isCachedData} 
+            />
+            
+            {/* Pemisah */}
+            <div className="border-t border-dashed border-white/10 my-3"></div>
+
+            {/* 2. Tampilkan Rencana Harga Saat Ini */}
+            <PlanDisplay 
+                plan={currentPricePlan} 
+                title="Opsi Harga Saat Ini (Market)" 
+                idrRate={idrRate} 
+                currency={currency} 
+            />
+
+            {/* 3. Tampilkan Reasoning (HANYA untuk Rencana Harga Saat Ini) */}
+            <div>
+                 <div className="flex items-center gap-1.5 mb-1">
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-electric" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider font-heading">Ulasan (Harga Saat Ini):</h4>
+                </div>
+                <div className="bg-black/20 border-l-2 border-electric/50 p-2 rounded-r-lg">
+                    {/* 'reasoning' sekarang hanya berisi ulasan untuk harga saat ini */}
+                    <p className="text-xs text-gray-300 leading-relaxed italic">{reasoning}</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+// --- AKHIR PERUBAHAN ---
+
 
 const ExchangeLogo = ({ logo, name }: { logo: string, name: string }) => {
   const [imgError, setImgError] = useState(false);
@@ -243,11 +308,14 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                             </div>
                         </div>
                     </div>
+                     {/* --- PERUBAHAN DISINI --- */}
+                     {/* Kontainer ini sekarang akan diisi oleh 'AnalysisContent' yang baru */}
                      <div className="flex items-center justify-center bg-black/20 rounded-lg p-2 min-h-[240px]">
                         {isLoading && <ProfitAnimation />}
                         {error && !isLoading && <ErrorDisplay title="Analisis Gagal" message={error} />}
                         {analysisResult && !isLoading && <AnalysisContent result={analysisResult} idrRate={idrRate} currency={currency} />}
                      </div>
+                     {/* --- AKHIR PERUBAHAN --- */}
                 </div>
 
                 <div className="col-span-10 lg:col-span-4 space-y-1.5">

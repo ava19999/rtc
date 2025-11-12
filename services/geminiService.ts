@@ -10,7 +10,10 @@ import type { AnalysisResult } from '../types';
 // HAPUS 'analysisSchema', karena sudah pindah ke server
 // const analysisSchema = { ... };
 
-export const fetchCryptoAnalysis = async (cryptoName: string, currentPrice: number): Promise<AnalysisResult> => {
+// --- PERUBAHAN DIMULAI ---
+export const fetchCryptoAnalysis = async (cryptoName: string, currentPrice: number, cryptoId: string): Promise<AnalysisResult> => {
+// --- AKHIR PERUBAHAN ---
+
   // HAPUS pengecekan API_KEY di sisi klien
   // if (!process.env.API_KEY) { ... }
 
@@ -22,11 +25,14 @@ export const fetchCryptoAnalysis = async (cryptoName: string, currentPrice: numb
       headers: {
         'Content-Type': 'application/json',
       },
-      // Kirim data yang dibutuhkan oleh function
+      // --- PERUBAHAN DIMULAI ---
+      // Kirim data yang dibutuhkan oleh function, termasuk cryptoId
       body: JSON.stringify({
         cryptoName: cryptoName,
         currentPrice: currentPrice,
+        cryptoId: cryptoId, // Tambahkan cryptoId
       }),
+      // --- AKHIR PERUBAHAN ---
     });
 
     if (!response.ok) {

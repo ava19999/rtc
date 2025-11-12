@@ -58,7 +58,6 @@ const tradePlanSchema = {
 };
 
 // 3. Skema untuk meminta KEDUA rencana (Cache Tidak Valid)
-// 'currentPricePlan' dibuat opsional (dihapus dari 'required')
 const fullAnalysisSchema = {
   type: Type.OBJECT,
   properties: {
@@ -68,31 +67,30 @@ const fullAnalysisSchema = {
     },
     currentPricePlan: {
       ...tradePlanSchema,
-      description: "The scalping plan for the current price. Omit this field (set to null) if the 3-step check fails (recommends 'WAIT')."
+      description: "The trade plan for entering at the current market price."
     },
     reasoning: {
       type: Type.STRING,
-      description: "A natural language rationale in Indonesian *only* for the 'currentPricePlan'. Explain *why* to trade or WAIT, without mentioning 'steps' or 'checklists'."
+      description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain its risks, SL, and TP. DO NOT mention the 'bestOption' here."
     },
   },
-  required: ['bestOption', 'reasoning'], 
+  required: ['bestOption', 'currentPricePlan', 'reasoning'],
 };
 
 // 4. Skema untuk meminta HANYA rencana harga saat ini (Cache Valid)
-// 'currentPricePlan' dibuat opsional (dihapus dari 'required')
 const currentPriceOnlySchema = {
     type: Type.OBJECT,
     properties: {
       currentPricePlan: {
         ...tradePlanSchema,
-        description: "The scalping plan for the current price. Omit this field (set to null) if the 3-step check fails (recommends 'WAIT')."
+        description: "The trade plan for entering at the current market price."
       },
       reasoning: {
         type: Type.STRING,
-        description: "A natural language rationale in Indonesian *only* for the 'currentPricePlan'. Explain *why* to trade or WAIT, without mentioning 'steps' or 'checklists'."
+        description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain its risks, SL, and TP."
       },
     },
-    required: ['reasoning'], 
+    required: ['currentPricePlan', 'reasoning'],
 };
 
 
@@ -104,7 +102,9 @@ async function callGemini(prompt: string, schema: any) {
     config: {
       responseMimeType: "application/json",
       responseSchema: schema as any,
-      temperature: 0.5,
+      // --- PERUBAHAN DI SINI ---
+      temperature: 0.5, // Diatur ke 0.5 sesuai permintaan
+      // --- AKHIR PERUBAHAN ---
     },
   });
 
@@ -127,6 +127,7 @@ export default async function handler(
   }
 
   try {
+    // 6. Ambil data dari body, tambahkan cryptoId
     const { cryptoName, currentPrice, cryptoId } = req.body;
 
     if (!cryptoName || currentPrice === undefined || !cryptoId) {
@@ -148,7 +149,7 @@ export default async function handler(
     let isCacheValid = false;
     let cachedBestOption: TradePlan | null = null;
 
-    // --- LOGIKA CACHE (Tetap sama) ---
+    // --- LOGIKA CACHE ---
     try {
         const snapshot = await cacheRef.once('value');
         const cachedData: TradePlan | null = snapshot.val();
@@ -188,39 +189,34 @@ export default async function handler(
       // --- KASUS 1: CACHE VALID ---
       // Minta HANYA 'currentPricePlan' dan 'reasoning'-nya
       
-      // --- PERUBAHAN PROMPT (BAHASA ALAMI) ---
+      // --- PERUBAHAN PROMPT ---
       const promptCurrentOnly = `
-        Persona: 'RTC Pro Trader AI'. Anda adalah scalper 5 menit yang disiplin dan realistis.
+        Persona: 'RTC Pro Trader AI'. Konservatif, teliti, dan sangat ketat.
         
-        STRATEGI WAJIB (3-LANGKAH KONFLUENS):
-        1.  Konteks (Tren 1 Jam): Cek tren utama (misal: 1H EMA 50). JANGAN melawan tren ini.
-        2.  Zona (S/R 5-Menit): Harga HARUS berada di zona Support/Resistance (S/R) 5 menit yang valid.
-        3.  Konfirmasi (RSI/Momentum): HARUS ada konfirmasi (misal: RSI oversold di support saat uptrend).
+        ATURAN WAJIB (HARUS DIPATUHI):
+        1.  Prioritas: **Profit konsisten (asal profit)** dengan **Stop Loss (SL) KETAT**.
+        2.  Waspada: HARUS menghitung psikologi pasar, jebakan (traps), & stop loss hunt.
+        3.  Validasi: Sinyal WAJIB dikonfirmasi Volume & S/R kuat.
 
         Harga ${cryptoName} saat ini: **$${formattedPrice}**.
-
+        
         TUGAS:
-        Analisis harga saat ini ($${formattedPrice}) menggunakan 3-Langkah Konfluens di atas.
-
-        1.  **Jika SEMUA 3 langkah terpenuhi (Konteks, Zona, Konfirmasi):**
-            * Buat \`currentPricePlan\` (Long/Short) dengan SL ketat dan TP realistis (misal 1.5R).
-            * Set \`confidence\` ke "Medium" atau "High".
-            * Di \`reasoning\`: Tulis ulasan alami dalam Bahasa Indonesia. JANGAN sebutkan "Langkah 1" atau "Ceklis 2". Langsung ke intinya. (Misal: "Peluang LONG: Tren 1 Jam sedang Bullish, dan harga saat ini memantul dari support 5 menit. RSI juga menunjukkan jenuh jual, mengkonfirmasi momentum beli.")
-
-        2.  **Jika SATU SAJA langkah gagal:**
-            * Set \`currentPricePlan\` ke \`null\`.
-            * Di \`reasoning\`: Tulis ulasan alami (Bahasa Indonesia) mengapa harus TUNGGU. JANGAN sebutkan "Langkah 1" atau "Ceklis 2".
-            * (Contoh Gagal Cek 2: "REKOMENDASI: TUNGGU. Tren 1 Jam memang Bullish, tapi harga saat ini mengambang di 'no-man's-land', terlalu jauh dari support. Sebaiknya tunggu harga pullback ke area support $XX.")
-            * (Contoh Gagal Cek 1: "REKOMENDASI: TUNGGU. Meskipun harga di support 5 menit, tren 1 Jam masih Bearish. Terlalu berisiko membuka posisi Long melawan tren.")
+        1.  **Rencana 'Harga Saat Ini' (untuk 'currentPricePlan'):**
+            * Tentukan rencana paling logis (Long/Short) jika harus masuk SEKARANG di **$${formattedPrice}**.
+            * Patuhi semua ATURAN WAJIB (SL KETAT, waspada jebakan).
+            * Tentukan: \`position\`, \`entryPrice\` (gunakan $${formattedPrice}), \`stopLoss\` (HARUS KETAT), \`takeProfit\` (realistis/konsisten), \`confidence\`.
+            * Jika masuk sekarang melanggar aturan (misal, terjebak di tengah), set \`confidence\` ke "Low".
+        2.  **Penjelasan (untuk 'reasoning'):**
+            * Berikan penjelasan SINGKAT dan LUGAS dalam Bahasa Indonesia *hanya* untuk 'Rencana Harga Saat Ini'. Jelaskan mengapa SL/TP dipilih berdasarkan analisis (Volume/S/R/Psikologi).
       `;
-      // --- AKHIR PERUBAHAN PROMPT ---
+      // --- AKHIR PROMPT ---
       
-      console.log(`[getAnalysis] Cache VALID. Menjalankan AI (Mode Scalping 3-Langkah) untuk harga saat ini...`);
+      console.log(`[getAnalysis] Cache VALID. Meminta AI HANYA untuk rencana harga saat ini...`);
       const freshData = await callGemini(promptCurrentOnly, currentPriceOnlySchema);
 
       const finalResult: AnalysisResult = {
         bestOption: cachedBestOption,
-        currentPricePlan: freshData.currentPricePlan || null, // Pastikan null jika tidak ada
+        currentPricePlan: freshData.currentPricePlan,
         reasoning: freshData.reasoning,
         isCachedData: true
       };
@@ -231,39 +227,39 @@ export default async function handler(
       // --- KASUS 2: CACHE TIDAK VALID / KOSONG ---
       // Minta KEDUA rencana
       
-      // --- PERUBAHAN PROMPT (BAHASA ALAMI) ---
+      // --- PERUBAHAN PROMPT ---
       const promptFull = `
-        Persona: 'RTC Pro Trader AI'. Konservatif untuk 'bestOption', Disiplin untuk 'currentPricePlan'.
+        Persona: 'RTC Pro Trader AI'. Konservatif, teliti, dan sangat ketat.
+
+        ATURAN WAJIB (HARUS DIPATUHI):
+        1.  Prioritas: **Profit konsisten (asal profit)** dengan **Stop Loss (SL) KETAT**.
+        2.  Waspada: HARUS menghitung psikologi pasar, jebakan (traps), & stop loss hunt.
+        3.  Validasi: Sinyal WAJIB dikonfirmasi Volume & S/R kuat.
 
         Harga ${cryptoName} saat ini: **$${formattedPrice}**.
 
         TUGAS ANDA:
-        Anda HARUS menghasilkan DUA output terpisah.
+        Anda HARUS menghasilkan DUA rencana trading terpisah, mematuhi semua ATURAN WAJIB.
 
         1.  **Rencana 'Opsi Terbaik' (untuk \`bestOption\`):**
-            * Gunakan analisis konservatif (S/R Kunci Harian/4 Jam, Volume, Psikologi Pasar).
-            * Cari "harga terbaik" (Limit Order) yang paling high-probability.
+            * Cari "harga terbaik" (Limit Order) yang paling high-probability dan konservatif.
             * Fokus pada S/R KUNCI yang valid (terkonfirmasi Volume) yang masuk akal untuk ditunggu (pullback/retest).
-            * Tentukan: \`position\`, \`entryPrice\` (harga limit), \`stopLoss\` (KETAT), \`takeProfit\` (konsisten), \`confidence\` ("High" atau "Medium").
+            * Tentukan: \`position\`, \`entryPrice\` (harga limit), \`stopLoss\` (KETAT), \`takeProfit\` (konsisten), \`confidence\` ("High" atau "Medium" untuk rencana ini).
 
-        2.  **Rencana 'Harga Saat Ini' (untuk \`currentPricePlan\` dan \`reasoning\`):**
-            * WAJIB Terapkan STRATEGI SCALPING 3-LANGKAH KONFLUENS (Konteks, Zona, Konfirmasi).
-            * **CEK 1 (Konteks):** Cek tren 1 Jam.
-            * **CEK 2 (Zona):** Cek apakah harga ($${formattedPrice}) di S/R 5-menit yang valid.
-            * **CEK 3 (Konfirmasi):** Cek apakah ada konfirmasi momentum/RSI di zona tersebut.
-            *
-            * **OUTPUT (Jika 3 Ceklis Lolos):** Buat \`currentPricePlan\` (Long/Short) sesuai hasil konfluens.
-            * **OUTPUT (Jika 1 Ceklis Gagal):** Set \`currentPricePlan\` ke \`null\`.
-            * **Reasoning (untuk \`reasoning\`):** Tulis ulasan alami (Bahasa Indonesia) mengapa harus TUNGGU atau mengapa sinyal valid. JANGAN sebutkan "Langkah 1" atau "Ceklis 2".
-            * (Contoh Gagal: "REKOMENDASI: TUNGGU. Gagal Cek 2: Harga di 'no-man's-land'. Tunggu pullback ke support 5-menit.").
-            * (Contoh Lolos: "Peluang SHORT: Tren 1 Jam Bearish, harga tertahan di resistance 5-menit, dan RSI Overbought.").
+        2.  **Rencana 'Harga Saat Ini' (untuk \`currentPricePlan\`):**
+            * Tentukan rencana paling logis (Long/Short) jika harus masuk SEKARANG di **$${formattedPrice}**.
+            * Tentukan: \`position\`, \`entryPrice\` (gunakan $${formattedPrice}), \`stopLoss\` (KETAT), \`takeProfit\` (konsisten), \`confidence\`.
+            * Jika masuk sekarang sangat berisiko/melanggar aturan, set \`confidence\` ke "Low".
+
+        3.  **Penjelasan (untuk \`reasoning\`):**
+            * Berikan penjelasan SINGKAT dan LUGAS dalam Bahasa Indonesia *hanya* untuk 'Rencana Harga Saat Ini' (poin 2).
+            * Jelaskan risiko dan alasan SL/TP-nya (Volume/S/R/Psikologi).
             * JANGAN sebutkan 'Opsi Terbaik' di dalam reasoning.
       `;
-      // --- AKHIR PERUBAHAN PROMPT ---
+      // --- AKHIR PROMPT ---
 
-      console.log(`[getAnalysis] Cache TIDAK VALID. Meminta AI untuk 'bestOption' (Umum) dan 'currentPricePlan' (Mode Scalping 3-Langkah)...`);
-      const fullResult = await callGemini(promptFull, fullAnalysisSchema) as Omit<AnalysisResult, 'isCachedData' | 'currentPricePlan'> & { currentPricePlan?: TradePlan };
-
+      console.log(`[getAnalysis] Cache TIDAK VALID. Meminta AI untuk KEDUA rencana...`);
+      const fullResult = await callGemini(promptFull, fullAnalysisSchema) as Omit<AnalysisResult, 'isCachedData'>;
 
       // Simpan 'bestOption' yang baru ke cache
       try {
@@ -271,13 +267,12 @@ export default async function handler(
         console.log(`[getAnalysis] 'bestOption' baru disimpan ke cache untuk ${cryptoId}.`);
       } catch (e) {
         console.error(`[getAnalysis] GAGAL menyimpan 'bestOption' ke cache:`, (e as Error).message);
+        // Jangan hentikan proses, kirim saja datanya
       }
       
       const finalResult: AnalysisResult = {
-        bestOption: fullResult.bestOption,
-        currentPricePlan: fullResult.currentPricePlan || null, // Pastikan null jika tidak ada
-        reasoning: fullResult.reasoning,
-        isCachedData: false 
+        ...fullResult,
+        isCachedData: false // Tandai bahwa ini adalah data baru
       };
 
       return res.status(200).json(finalResult);

@@ -214,8 +214,7 @@ const PlanDisplay: React.FC<{
 
 
 /**
- * Konten utama modal, di-update untuk menggunakan BestOptionDisplay
- * dan menangani currentPricePlan yang null.
+ * Konten utama modal, di-update untuk menggunakan BestOptionDisplay.
  */
 const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null, currency: Currency }> = ({ result, idrRate, currency }) => {
     const { bestOption, currentPricePlan, reasoning } = result;
@@ -234,35 +233,22 @@ const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null
             {/* Pemisah */}
             <div className="border-t border-dashed border-white/10 my-3"></div>
 
-            {/* 2. Tampilkan Rencana Harga Saat Ini (JIKA ADA) atau TUNGGU */}
-            {currentPricePlan ? (
-                <PlanDisplay 
-                    plan={currentPricePlan} 
-                    title="Opsi Harga Saat Ini (5-Min ORB)" 
-                    idrRate={idrRate} 
-                    currency={currency} 
-                />
-            ) : (
-                // Tampilkan pesan "Tunggu" jika plan tidak ada
-                <div className="space-y-2.5 w-full">
-                    <h4 className="text-sm font-bold text-gray-200">Opsi Harga Saat Ini (5-Min ORB)</h4>
-                    <div className="flex flex-col items-center justify-center text-center p-3 bg-yellow-500/10 rounded-lg min-h-[100px]">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-400 mb-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <p className="text-base font-semibold text-yellow-400">Rekomendasi: Tunggu</p>
-                    </div>
-                </div>
-            )}
+            {/* 2. Tampilkan Rencana Harga Saat Ini (Komponen LAMA - Detail) */}
+            <PlanDisplay 
+                plan={currentPricePlan} 
+                title="Opsi Harga Saat Ini (Market)" 
+                idrRate={idrRate} 
+                currency={currency} 
+            />
 
-            {/* 3. Tampilkan Reasoning (Selalu tampil, menjelaskan plan atau alasan menunggu) */}
+            {/* 3. Tampilkan Reasoning (HANYA untuk Rencana Harga Saat Ini) */}
             <div>
                  <div className="flex items-center gap-1.5 mb-1">
                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-electric" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
-                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider font-heading">Ulasan Strategi (5-Min ORB):</h4>
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider font-heading">Ulasan (Harga Saat Ini):</h4>
                 </div>
                 <div className="bg-black/20 border-l-2 border-electric/50 p-2 rounded-r-lg">
-                    {/* 'reasoning' sekarang menjelaskan 'currentPricePlan' ATAU alasan 'Tunggu' */}
+                    {/* 'reasoning' sekarang hanya berisi ulasan untuk harga saat ini */}
                     <p className="text-xs text-gray-300 leading-relaxed italic">{reasoning}</p>
                 </div>
             </div>
@@ -356,7 +342,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <div className="absolute bottom-full mb-1.5 w-56 bg-gray-800 text-white text-xs rounded-lg p-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 -translate-x-1/2 left-1/2">
-                                Analisis 'Opsi Terbaik' (Limit) didasarkan pada S/R Kunci & Volume. Analisis 'Harga Saat Ini' (Market) didasarkan pada strategi 5-Min Opening Range Breakout (ORB).
+                                Analisis ini didasarkan pada metodologi multi-indikator canggih yang menggabungkan WaveTrend Oscillator, Divergensi, RSI, dan Money Flow Index (MFI) untuk mengidentifikasi potensi peluang perdagangan.
                                 <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-3 border-x-transparent border-t-3 border-t-gray-800"></div>
                             </div>
                         </div>

@@ -52,13 +52,11 @@ export interface TradePlan {
 /**
  * Hasil analisis AI yang diperbarui.
  * 'bestOption' adalah rencana limit order (di-cache).
- * 'currentPricePlan' adalah rencana market order (selalu fresh) atau null.
+ * 'currentPricePlan' adalah rencana market order (selalu fresh).
  */
 export interface AnalysisResult {
   bestOption: TradePlan;
-  // --- PERUBAHAN DI SINI ---
-  currentPricePlan: TradePlan | null; // Izinkan untuk null
-  // --- AKHIR PERUBAHAN ---
+  currentPricePlan: TradePlan;
   reasoning: string; // Deskripsi ini HANYA untuk 'currentPricePlan'
   isCachedData: boolean; // Flag untuk UI: true jika 'bestOption' dari cache
 }

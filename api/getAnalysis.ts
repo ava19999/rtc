@@ -57,6 +57,7 @@ const tradePlanSchema = {
   required: ['position', 'entryPrice', 'stopLoss', 'takeProfit', 'confidence'],
 };
 
+// --- PERUBAHAN DI SINI ---
 // 3. Skema untuk meminta KEDUA rencana (Cache Tidak Valid)
 const fullAnalysisSchema = {
   type: Type.OBJECT,
@@ -67,14 +68,14 @@ const fullAnalysisSchema = {
     },
     currentPricePlan: {
       ...tradePlanSchema,
-      description: "The trade plan for entering at the current market price."
+      description: "The trade plan for entering at the current market price, based on the 5-Min ORB strategy. Omit this field (set to null) if the strategy says to WAIT."
     },
     reasoning: {
       type: Type.STRING,
-      description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain its risks, SL, and TP. DO NOT mention the 'bestOption' here."
+      description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain why the 3-step checklist passed or FAILED."
     },
   },
-  required: ['bestOption', 'currentPricePlan', 'reasoning'],
+  required: ['bestOption', 'reasoning'], // 'currentPricePlan' dibuat opsional
 };
 
 // 4. Skema untuk meminta HANYA rencana harga saat ini (Cache Valid)
@@ -83,15 +84,16 @@ const currentPriceOnlySchema = {
     properties: {
       currentPricePlan: {
         ...tradePlanSchema,
-        description: "The trade plan for entering at the current market price."
+        description: "The trade plan for entering at the current market price, based on the 5-Min ORB strategy. Omit this field (set to null) if the strategy says to WAIT."
       },
       reasoning: {
         type: Type.STRING,
-        description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain its risks, SL, and TP."
+        description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain why the 3-step checklist passed or FAILED."
       },
     },
-    required: ['currentPricePlan', 'reasoning'],
+    required: ['reasoning'], // 'currentPricePlan' dibuat opsional
 };
+// --- AKHIR PERUBAHAN ---
 
 
 // Fungsi helper untuk memanggil AI
@@ -102,9 +104,7 @@ async function callGemini(prompt: string, schema: any) {
     config: {
       responseMimeType: "application/json",
       responseSchema: schema as any,
-      // --- PERUBAHAN DI SINI ---
-      temperature: 0.5, // Diatur ke 0.5 sesuai permintaan
-      // --- AKHIR PERUBAHAN ---
+      temperature: 0.5, // Sedikit kreativitas untuk analisis
     },
   });
 
@@ -191,32 +191,45 @@ export default async function handler(
       
       // --- PERUBAHAN PROMPT ---
       const promptCurrentOnly = `
-        Persona: 'RTC Pro Trader AI'. Konservatif, teliti, dan sangat ketat.
+        Persona: 'RTC Pro Trader AI'. Anda adalah scalper 5 menit yang SANGAT DISIPLIN.
         
-        ATURAN WAJIB (HARUS DIPATUHI):
-        1.  Prioritas: **Profit konsisten (asal profit)** dengan **Stop Loss (SL) KETAT**.
-        2.  Waspada: HARUS menghitung psikologi pasar, jebakan (traps), & stop loss hunt.
-        3.  Validasi: Sinyal WAJIB dikonfirmasi Volume & S/R kuat.
-
+        STRATEGI WAJIB ANDA: "DataTrader 5-Min Opening Range Breakout (ORB)".
         Harga ${cryptoName} saat ini: **$${formattedPrice}**.
-        
+
         TUGAS:
-        1.  **Rencana 'Harga Saat Ini' (untuk 'currentPricePlan'):**
-            * Tentukan rencana paling logis (Long/Short) jika harus masuk SEKARANG di **$${formattedPrice}**.
-            * Patuhi semua ATURAN WAJIB (SL KETAT, waspada jebakan).
-            * Tentukan: \`position\`, \`entryPrice\` (gunakan $${formattedPrice}), \`stopLoss\` (HARUS KETAT), \`takeProfit\` (realistis/konsisten), \`confidence\`.
-            * Jika masuk sekarang melanggar aturan (misal, terjebak di tengah), set \`confidence\` ke "Low".
-        2.  **Penjelasan (untuk 'reasoning'):**
-            * Berikan penjelasan SINGKAT dan LUGAS dalam Bahasa Indonesia *hanya* untuk 'Rencana Harga Saat Ini'. Jelaskan mengapa SL/TP dipilih berdasarkan analisis (Volume/S/R/Psikologi).
+        Jalankan 3-LANGKAH CEKLIS berikut untuk harga saat ini ($${formattedPrice}).
+
+        1.  **CEKLIS 1: Identifikasi Range 5 Menit.**
+            * Apakah sudah terbentuk 'Opening Range' 5 menit yang jelas (misal, 1-2 jam terakhir)?
+            * Tentukan Support (Low) dan Resistance (High) dari range tersebut.
+
+        2.  **CEKLIS 2: Konfirmasi Breakout/Breakdown.**
+            * Apakah harga saat ini ($${formattedPrice}) sudah *tutup* (close) di luar range itu?
+            * Jika ya, apakah ini breakout (di atas High) atau breakdown (di bawah Low)?
+
+        3.  **CEKLIS 3: Entry (Kriteria Saat Ini).**
+            * Apakah harga saat ini berada di titik entry yang ideal (misal: sedang melakukan retest ke range, atau baru saja breakout)?
+
+        OUTPUT:
+        1.  **Jika SEMUA 3 ceklis lolos (misal: Range ada, Breakout terkonfirmasi, dan harga saat ini ideal untuk entry):**
+            * Buat \`currentPricePlan\` (Long/Short) dengan SL ketat (misal: di dalam range) dan TP 1.5R.
+            * Set \`confidence\` ke "Medium" atau "High".
+            * Di \`reasoning\`: Jelaskan bahwa 3 ceklis lolos.
+
+        2.  **Jika SATU SAJA ceklis GAGAL (misal: harga masih di dalam range, atau sudah breakout tapi terlalu jauh):**
+            * Set \`currentPricePlan\` ke \`null\` (atau jangan sertakan field-nya).
+            * Di \`reasoning\`: Beri tahu statusnya. Contoh: "REKOMENDASI: TUNGGU. Gagal Ceklis 2: Harga masih di dalam range 5 menit. Belum ada konfirmasi breakout."
       `;
       // --- AKHIR PROMPT ---
       
-      console.log(`[getAnalysis] Cache VALID. Meminta AI HANYA untuk rencana harga saat ini...`);
+      console.log(`[getAnalysis] Cache VALID. Meminta AI (Mode DataTrader 5-Min ORB) HANYA untuk rencana harga saat ini...`);
       const freshData = await callGemini(promptCurrentOnly, currentPriceOnlySchema);
 
       const finalResult: AnalysisResult = {
         bestOption: cachedBestOption,
-        currentPricePlan: freshData.currentPricePlan,
+        // --- PERUBAHAN DI SINI ---
+        currentPricePlan: freshData.currentPricePlan || null, // Pastikan null jika tidak ada
+        // --- AKHIR PERUBAHAN ---
         reasoning: freshData.reasoning,
         isCachedData: true
       };
@@ -229,37 +242,35 @@ export default async function handler(
       
       // --- PERUBAHAN PROMPT ---
       const promptFull = `
-        Persona: 'RTC Pro Trader AI'. Konservatif, teliti, dan sangat ketat.
-
-        ATURAN WAJIB (HARUS DIPATUHI):
-        1.  Prioritas: **Profit konsisten (asal profit)** dengan **Stop Loss (SL) KETAT**.
-        2.  Waspada: HARUS menghitung psikologi pasar, jebakan (traps), & stop loss hunt.
-        3.  Validasi: Sinyal WAJIB dikonfirmasi Volume & S/R kuat.
+        Persona: 'RTC Pro Trader AI'. Konservatif, teliti, dan sangat ketat untuk 'bestOption'. Sangat disiplin dan mekanis untuk 'currentPricePlan'.
 
         Harga ${cryptoName} saat ini: **$${formattedPrice}**.
 
         TUGAS ANDA:
-        Anda HARUS menghasilkan DUA rencana trading terpisah, mematuhi semua ATURAN WAJIB.
+        Anda HARUS menghasilkan DUA output terpisah.
 
         1.  **Rencana 'Opsi Terbaik' (untuk \`bestOption\`):**
-            * Cari "harga terbaik" (Limit Order) yang paling high-probability dan konservatif.
+            * Gunakan analisis konservatif (S/R Kunci, Volume, Psikologi Pasar).
+            * Cari "harga terbaik" (Limit Order) yang paling high-probability.
             * Fokus pada S/R KUNCI yang valid (terkonfirmasi Volume) yang masuk akal untuk ditunggu (pullback/retest).
-            * Tentukan: \`position\`, \`entryPrice\` (harga limit), \`stopLoss\` (KETAT), \`takeProfit\` (konsisten), \`confidence\` ("High" atau "Medium" untuk rencana ini).
+            * Tentukan: \`position\`, \`entryPrice\` (harga limit), \`stopLoss\` (KETAT), \`takeProfit\` (konsisten), \`confidence\` ("High" atau "Medium").
 
-        2.  **Rencana 'Harga Saat Ini' (untuk \`currentPricePlan\`):**
-            * Tentukan rencana paling logis (Long/Short) jika harus masuk SEKARANG di **$${formattedPrice}**.
-            * Tentukan: \`position\`, \`entryPrice\` (gunakan $${formattedPrice}), \`stopLoss\` (KETAT), \`takeProfit\` (konsisten), \`confidence\`.
-            * Jika masuk sekarang sangat berisiko/melanggar aturan, set \`confidence\` ke "Low".
-
-        3.  **Penjelasan (untuk \`reasoning\`):**
-            * Berikan penjelasan SINGKAT dan LUGAS dalam Bahasa Indonesia *hanya* untuk 'Rencana Harga Saat Ini' (poin 2).
-            * Jelaskan risiko dan alasan SL/TP-nya (Volume/S/R/Psikologi).
+        2.  **Rencana 'Harga Saat Ini' (untuk \`currentPricePlan\` dan \`reasoning\`):**
+            * WAJIB Terapkan STRATEGI "DataTrader 5-Min Opening Range Breakout (ORB)".
+            * **CEKLIS 1:** Identifikasi 'Opening Range' 5 menit terakhir yang jelas (High/Low).
+            * **CEKLIS 2:** Cek apakah harga ($${formattedPrice}) sudah *tutup* di luar range itu (Breakout/Breakdown).
+            * **CEKLIS 3:** Cek apakah harga ($${formattedPrice}) ada di titik entry ideal (misal: retest) atau sudah terlalu jauh.
+            * **OUTPUT (Jika 3 Ceklis Lolos):** Buat \`currentPricePlan\` (Long/Short) sesuai hasil breakout.
+            * **OUTPUT (Jika 1 Ceklis Gagal):** Set \`currentPricePlan\` ke \`null\`.
+            * **Reasoning (untuk \`reasoning\`):** Jelaskan dalam Bahasa Indonesia hasil dari 3-langkah ceklis ORB. (Misal: "REKOMENDASI: TUNGGU. Gagal Ceklis 2: Harga masih di dalam range 5 menit. Belum ada sinyal breakout.")
             * JANGAN sebutkan 'Opsi Terbaik' di dalam reasoning.
       `;
       // --- AKHIR PROMPT ---
 
-      console.log(`[getAnalysis] Cache TIDAK VALID. Meminta AI untuk KEDUA rencana...`);
-      const fullResult = await callGemini(promptFull, fullAnalysisSchema) as Omit<AnalysisResult, 'isCachedData'>;
+      console.log(`[getAnalysis] Cache TIDAK VALID. Meminta AI untuk 'bestOption' (Umum) dan 'currentPricePlan' (Mode DataTrader 5-Min ORB)...`);
+      // Tipe diubah untuk mencerminkan bahwa currentPricePlan opsional
+      const fullResult = await callGemini(promptFull, fullAnalysisSchema) as Omit<AnalysisResult, 'isCachedData' | 'currentPricePlan'> & { currentPricePlan?: TradePlan };
+
 
       // Simpan 'bestOption' yang baru ke cache
       try {
@@ -271,7 +282,11 @@ export default async function handler(
       }
       
       const finalResult: AnalysisResult = {
-        ...fullResult,
+        bestOption: fullResult.bestOption,
+        // --- PERUBAHAN DI SINI ---
+        currentPricePlan: fullResult.currentPricePlan || null, // Pastikan null jika tidak ada
+        // --- AKHIR PERUBAHAN ---
+        reasoning: fullResult.reasoning,
         isCachedData: false // Tandai bahwa ini adalah data baru
       };
 

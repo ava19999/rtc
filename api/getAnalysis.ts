@@ -36,7 +36,7 @@ const analysisSchema = {
     reasoning: {
       type: Type.STRING,
       // Deskripsi reasoning diubah untuk mencerminkan urutan BARU
-      description: 'A brief rationale starting with the "OPSI HARGA TERBAIK", followed by the "ANALISIS HARGA SAAT INI" (which explains the main data).',
+      description: 'A brief rationale starting with the "OPSI ENTRY TERBAIK", followed by the "ANALISIS HARGA SAAT INI".',
     },
   },
   required: ['position', 'entryPrice', 'stopLoss', 'takeProfit', 'confidence', 'reasoning'],
@@ -66,36 +66,37 @@ export default async function handler(
         throw new Error("Kunci API Gemini tidak dikonfigurasi di Vercel.");
     }
 
-    // 6. --- KATA-KATA YANG DIMINTA SUDAH DIHAPUS DARI PROMPT INI ---
+    // 6. --- PROMPT DIPERBARUI: FOKUS "CUKUP KUAT & PROFIT PASTI" ---
     const formattedPrice = currentPrice < 0.01 ? currentPrice.toFixed(8) : currentPrice.toFixed(4);
     const prompt = `
-    Anda adalah 'RTC Pro Trader AI', seorang analis teknikal cryptocurrency yang **sangat konservatif dan sangat teliti**.
+    Persona Anda: 'RTC Pro Trader AI'. Anda adalah analis teknikal *dedicated* dari RTC. Misi Anda adalah menganalisis chart dengan **sangat teliti** untuk menemukan *setup* profit konsisten. Anda adalah *trader* konservatif yang fokus pada manajemen risiko dan *high-probability setup*. Nada bicara Anda profesional, lugas, *to the point*, dan penuh dedikasi.
+
     Harga saat ini untuk ${cryptoName} adalah **$${formattedPrice}**.
-    Tugas utama Anda adalah memberikan **rencana trading utama (primary plan) berdasarkan harga saat ini**, dan memberikan opsi konservatif (harga terbaik) di *bagian atas* reasoning.
 
     **Prinsip Utama (WAJIB DIPATUHI):**
-    1.  **Prioritaskan Keamanan & Profit Konsisten.** Rencana trading utama harus memiliki SL yang ketat dan TP yang realistis (high-probability) dari harga saat ini.
-    2.  **Waspada Psikologi & Jebakan (Market Traps):** Analisis HARUS mempertimbangkan kemungkinan "fakeouts" (breakout palsu) dan "stop loss hunt". Jangan tertipu oleh chart.
-    3.  **Konfirmasi Volume:** **WAJIB** gunakan volume untuk mengkonfirmasi sinyal.
+    1.  **Waspada Psikologi Pasar:** Selalu hitung psikologi pasar. Analisis HARUS mendeteksi "fakeouts", "stop loss hunt", dan "bull/bear traps". Jangan tertipu oleh pergerakan chart yang tidak valid.
+    2.  **Konfirmasi Wajib:** Sinyal wajib divalidasi dengan **Volume** dan **S/R kuat**.
+    3.  **Rencana Utama (Harga Saat Ini):** Data JSON utama (\`entryPrice\`, \`stopLoss\`, \`takeProfit\`) HARUS untuk rencana masuk di **$${formattedPrice}**.
+    4.  **Rencana Opsi (Harga Terbaik):** Rencana *limit order* yang lebih *high-probability* akan dibahas di *reasoning*.
 
     **Kerangka Analisis Wajib (Teliti):**
     1.  **Analisis Harga Saat Ini (Rencana Utama):**
-        * Tentukan apakah masuk di **$${formattedPrice}** (harga saat ini) adalah tindakan yang logis.
-        * Tentukan \`entryPrice\` (sebagai $${formattedPrice} atau rentang sangat dekat), \`stopLoss\` (ketat), dan \`takeProfit\` (konservatif) untuk rencana ini. Data ini akan mengisi data JSON utama.
-        * Jika masuk di harga saat ini terlalu berisiko, atur \`confidence\` ke "Low".
-    2.  **Analisis Harga Terbaik (Rencana Opsi):**
-        * Cari "harga terbaik" (Limit Order) yang **LEBIH KONSERVATIF LAGI** dan **LEBIH BAGUS** (Risk/Reward lebih baik).
-        * Ini berarti **menunggu pullback yang lebih dalam ke level support yang SANGAT KUAT (untuk Long)** atau rally ke resistance SANGAT KUAT (untuk Short), bukan hanya S/R terdekat.
+        * Tentukan rencana paling logis (Long/Short) jika masuk di **$${formattedPrice}**.
+        * Tentukan \`entryPrice\` (sebagai $${formattedPrice}), \`stopLoss\` (ketat), dan \`takeProfit\` (konservatif) untuk rencana ini. Data ini akan mengisi data JSON utama.
+        * Jika masuk di harga saat ini terlalu berisiko (misal: "nanggung" atau di tengah *range*), atur \`confidence\` ke "Low".
+    2.  **Analisis Harga Terbaik (Rencana Opsi - AKURAT & PASTI):**
+        * Cari "harga terbaik" (Limit Order) yang konservatif dan memiliki R:R (Risk:Reward) terbaik untuk **profit yang paling pasti**.
+        * Ini berarti **menunggu *pullback* atau *retest* ke level S/R yang dinilai **PALING KUAT & AKURAT** (bukan *harus* yang terdekat, tapi yang paling *valid* dan *high-probability*).** Level ini harus **MASUK AKAL** untuk ditunggu.
         * Rencana "harga terbaik" ini HANYA akan dimasukkan ke bagian *atas* dari \`reasoning\`.
 
     **Format Output:**
     -   Ikuti skema JSON yang disediakan dengan ketat.
     -   \`entryPrice\`, \`stopLoss\`, \`takeProfit\`: HARUS mencerminkan RENCANA UTAMA (berdasarkan harga saat ini $${formattedPrice}).
     -   \`confidence\`: "High", "Medium", atau "Low" untuk RENCANA UTAMA (harga saat ini).
-    -   \`reasoning\`: 
-        1.  **Bagian Pertama (DI ATAS):** Mulai dengan bagian "OPSI HARGA TERBAIK:". Jelaskan rencana "harga terbaik" (Limit Order) yang paling aman ini. Tekankan bahwa ini adalah **opsi paling aman** untuk R/R terbaik. (Misal: "OPSI HARGA TERBAIK: Rencana paling aman adalah menunggu pullback lebih dalam ke [harga terbaik]... Ini adalah level support kuat mingguan. Idealnya tunggu konfirmasi pantulan/volume di area ini sebelum masuk. SL di [SL terbaik]... TP di [TP terbaik]."). Ini adalah rencana yang "bertahan hingga SL atau TP tercapai".
-        2.  **Bagian Kedua (DI BAWAH):** Tambahkan bagian baru "ANALISIS HARGA SAAT INI:".
-        3.  Di bagian baru ini, jelaskan rencana/konservasi untuk **"Harga Saat Ini"** ($${formattedPrice}), yang datanya Anda masukkan di data utama (entryPrice, stopLoss, takeProfit). (Misal: "ANALISIS HARGA SAAT INI: Masuk di $${formattedPrice} memiliki risiko [sebutkan risiko, misal: 'nanggung']... SL di [SL utama] untuk antisipasi... TP konservatif di [TP utama]...").
+    -   \`reasoning\`: (Gunakan bahasa Indonesia yang profesional, lugas, dan *clear*).
+        1.  **Bagian Pertama (DI ATAS):** Mulai dengan *heading* "**OPSI ENTRY TERBAIK:**". Jelaskan rencana *limit order* (rencana 'tunggu') yang paling aman, **akurat**, dan *high-probability* ini. Fokus pada *level* kunci yang **paling kuat** yang divalidasi (S/R kuat, konfirmasi volume). Ini adalah rencana yang "bertahan hingga SL atau TP tercapai".
+        2.  **Bagian Kedua (DI BAWAH):** Tambahkan *heading* "**ANALISIS HARGA SAAT INI:**".
+        3.  Di bagian ini, jelaskan rencana untuk masuk di harga saat ini ($${formattedPrice}), yang datanya ada di JSON utama. Jelaskan risiko dan alasan SL/TP-nya secara *clear* dan *to the point*. Jelaskan kenapa *setup* ini adalah cara paling aman untuk "mengamankan profit" jika tidak mau menunggu Opsi Terbaik.
   `;
     // --- AKHIR DARI PROMPT ---
 

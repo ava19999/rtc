@@ -29,8 +29,6 @@ try {
 // 1. AMBIL API KEY DARI VERCEL ENVIRONMENT VARIABLES (AMAN)
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 
-// --- PERUBAHAN SKEMA DIMULAI ---
-
 // 2. Skema untuk satu rencana trading (TradePlan)
 const tradePlanSchema = {
   type: Type.OBJECT,
@@ -95,8 +93,6 @@ const currentPriceOnlySchema = {
     required: ['currentPricePlan', 'reasoning'],
 };
 
-// --- PERUBAHAN SKEMA SELESAI ---
-
 
 // Fungsi helper untuk memanggil AI
 async function callGemini(prompt: string, schema: any) {
@@ -106,7 +102,9 @@ async function callGemini(prompt: string, schema: any) {
     config: {
       responseMimeType: "application/json",
       responseSchema: schema as any,
-      temperature: 0.3,
+      // --- PERUBAHAN DI SINI ---
+      temperature: 0.5, // Diatur ke 0.5 sesuai permintaan
+      // --- AKHIR PERUBAHAN ---
     },
   });
 
@@ -191,18 +189,27 @@ export default async function handler(
       // --- KASUS 1: CACHE VALID ---
       // Minta HANYA 'currentPricePlan' dan 'reasoning'-nya
       
+      // --- PERUBAHAN PROMPT ---
       const promptCurrentOnly = `
-        Persona: 'RTC Pro Trader AI'. Fokus pada high-probability setup dan konservatif.
+        Persona: 'RTC Pro Trader AI'. Konservatif, teliti, dan sangat ketat.
+        
+        ATURAN WAJIB (HARUS DIPATUHI):
+        1.  Prioritas: **Profit konsisten (asal profit)** dengan **Stop Loss (SL) KETAT**.
+        2.  Waspada: HARUS menghitung psikologi pasar, jebakan (traps), & stop loss hunt.
+        3.  Validasi: Sinyal WAJIB dikonfirmasi Volume & S/R kuat.
+
         Harga ${cryptoName} saat ini: **$${formattedPrice}**.
         
         TUGAS:
         1.  **Rencana 'Harga Saat Ini' (untuk 'currentPricePlan'):**
             * Tentukan rencana paling logis (Long/Short) jika harus masuk SEKARANG di **$${formattedPrice}**.
-            * Tentukan: \`position\`, \`entryPrice\` (gunakan $${formattedPrice}), \`stopLoss\`, \`takeProfit\`, \`confidence\`.
-            * Jika masuk sekarang sangat berisiko, set \`confidence\` ke "Low".
+            * Patuhi semua ATURAN WAJIB (SL KETAT, waspada jebakan).
+            * Tentukan: \`position\`, \`entryPrice\` (gunakan $${formattedPrice}), \`stopLoss\` (HARUS KETAT), \`takeProfit\` (realistis/konsisten), \`confidence\`.
+            * Jika masuk sekarang melanggar aturan (misal, terjebak di tengah), set \`confidence\` ke "Low".
         2.  **Penjelasan (untuk 'reasoning'):**
-            * Berikan penjelasan SINGKAT dan LUGAS dalam Bahasa Indonesia *hanya* untuk 'Rencana Harga Saat Ini' di atas.
+            * Berikan penjelasan SINGKAT dan LUGAS dalam Bahasa Indonesia *hanya* untuk 'Rencana Harga Saat Ini'. Jelaskan mengapa SL/TP dipilih berdasarkan analisis (Volume/S/R/Psikologi).
       `;
+      // --- AKHIR PROMPT ---
       
       console.log(`[getAnalysis] Cache VALID. Meminta AI HANYA untuk rencana harga saat ini...`);
       const freshData = await callGemini(promptCurrentOnly, currentPriceOnlySchema);
@@ -220,26 +227,36 @@ export default async function handler(
       // --- KASUS 2: CACHE TIDAK VALID / KOSONG ---
       // Minta KEDUA rencana
       
+      // --- PERUBAHAN PROMPT ---
       const promptFull = `
-        Persona: 'RTC Pro Trader AI'. Fokus pada high-probability setup, konservatif, dan manajemen risiko.
+        Persona: 'RTC Pro Trader AI'. Konservatif, teliti, dan sangat ketat.
+
+        ATURAN WAJIB (HARUS DIPATUHI):
+        1.  Prioritas: **Profit konsisten (asal profit)** dengan **Stop Loss (SL) KETAT**.
+        2.  Waspada: HARUS menghitung psikologi pasar, jebakan (traps), & stop loss hunt.
+        3.  Validasi: Sinyal WAJIB dikonfirmasi Volume & S/R kuat.
+
         Harga ${cryptoName} saat ini: **$${formattedPrice}**.
 
         TUGAS ANDA:
-        Anda HARUS menghasilkan DUA rencana trading terpisah dalam format JSON yang diminta.
+        Anda HARUS menghasilkan DUA rencana trading terpisah, mematuhi semua ATURAN WAJIB.
 
         1.  **Rencana 'Opsi Terbaik' (untuk \`bestOption\`):**
-            * Cari "harga terbaik" (Limit Order) yang paling high-probability, konservatif, dan R:R terbaik untuk profit paling pasti.
-            * Ini adalah level S/R KUNCI yang valid dan kuat, yang masuk akal untuk ditunggu (pullback/retest).
-            * Tentukan: \`position\`, \`entryPrice\` (harga limit order), \`stopLoss\`, \`takeProfit\`, \`confidence\` untuk rencana ini.
+            * Cari "harga terbaik" (Limit Order) yang paling high-probability dan konservatif.
+            * Fokus pada S/R KUNCI yang valid (terkonfirmasi Volume) yang masuk akal untuk ditunggu (pullback/retest).
+            * Tentukan: \`position\`, \`entryPrice\` (harga limit), \`stopLoss\` (KETAT), \`takeProfit\` (konsisten), \`confidence\` ("High" atau "Medium" untuk rencana ini).
 
         2.  **Rencana 'Harga Saat Ini' (untuk \`currentPricePlan\`):**
             * Tentukan rencana paling logis (Long/Short) jika harus masuk SEKARANG di **$${formattedPrice}**.
-            * Tentukan: \`position\`, \`entryPrice\` (gunakan $${formattedPrice}), \`stopLoss\`, \`takeProfit\`, \`confidence\` untuk rencana ini.
+            * Tentukan: \`position\`, \`entryPrice\` (gunakan $${formattedPrice}), \`stopLoss\` (KETAT), \`takeProfit\` (konsisten), \`confidence\`.
+            * Jika masuk sekarang sangat berisiko/melanggar aturan, set \`confidence\` ke "Low".
 
         3.  **Penjelasan (untuk \`reasoning\`):**
             * Berikan penjelasan SINGKAT dan LUGAS dalam Bahasa Indonesia *hanya* untuk 'Rencana Harga Saat Ini' (poin 2).
+            * Jelaskan risiko dan alasan SL/TP-nya (Volume/S/R/Psikologi).
             * JANGAN sebutkan 'Opsi Terbaik' di dalam reasoning.
       `;
+      // --- AKHIR PROMPT ---
 
       console.log(`[getAnalysis] Cache TIDAK VALID. Meminta AI untuk KEDUA rencana...`);
       const fullResult = await callGemini(promptFull, fullAnalysisSchema) as Omit<AnalysisResult, 'isCachedData'>;

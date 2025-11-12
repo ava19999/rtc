@@ -1,8 +1,6 @@
 // AnalysisModal.tsx
 import React, { useState } from 'react';
-// --- PERUBAHAN DIMULAI ---
 import type { AnalysisModalProps, AnalysisResult, Currency, ExchangeTicker, TradePlan } from '../types';
-// --- AKHIR PERUBAHAN ---
 
 const formatUsd = (price: number): string => {
   return new Intl.NumberFormat('en-US', {
@@ -85,15 +83,66 @@ const ErrorDisplay = ({ title, message }: { title: string, message: string }) =>
 // --- PERUBAHAN DIMULAI ---
 
 /**
- * Sub-komponen baru untuk menampilkan satu rencana trading.
+ * Komponen BARU: Tampilan minimalis untuk "Opsi Terbaik".
+ */
+const BestOptionDisplay: React.FC<{ 
+  plan: TradePlan, 
+  title: string, 
+  idrRate: number | null, 
+  currency: Currency 
+}> = ({ plan, title, idrRate, currency }) => {
+    
+    const { position, entryPrice, stopLoss, takeProfit, confidence } = plan;
+    const isLong = position === 'Long';
+    
+    // Hanya ambil nilai harga utama (USD atau IDR)
+    const entry = parseAndConvertPrice(entryPrice, idrRate, currency).primary;
+    const stop = parseAndConvertPrice(stopLoss, idrRate, currency).primary;
+    const profit = parseAndConvertPrice(takeProfit, idrRate, currency).primary;
+
+    const confidenceStyles: { [key: string]: string } = {
+        High: 'text-lime',
+        Medium: 'text-electric',
+        Low: 'text-yellow-400',
+    };
+    const confidenceText = confidence || 'N/A';
+    const confidenceClass = confidenceStyles[confidenceText] || 'text-gray-100';
+
+    return (
+        <div className="bg-white/5 p-2 rounded-lg">
+            {/* Baris Judul dan Keyakinan */}
+            <div className="flex items-center justify-between mb-1.5">
+                <h4 className="text-sm font-bold text-gray-200">{title}</h4>
+                <span className={`text-xs font-semibold ${confidenceClass}`}>
+                    Keyakinan: {confidenceText}
+                </span>
+            </div>
+            {/* Baris Data Ringkas */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs space-y-1 sm:space-y-0">
+                <span className={`font-semibold ${isLong ? 'text-lime' : 'text-magenta'}`}>
+                    {position}
+                </span>
+                <div className="text-gray-300 flex flex-wrap gap-x-3">
+                    <span><span className="text-gray-500">Entry:</span> {entry}</span>
+                    <span><span className="text-gray-500">SL:</span> {stop}</span>
+                    <span><span className="text-gray-500">TP:</span> {profit}</span>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+/**
+ * Sub-komponen yang ada: Sekarang HANYA untuk "Rencana Harga Saat Ini".
+ * Badge 'isCached' telah dihapus.
  */
 const PlanDisplay: React.FC<{ 
   plan: TradePlan, 
   title: string, 
   idrRate: number | null, 
-  currency: Currency, 
-  isCached?: boolean 
-}> = ({ plan, title, idrRate, currency, isCached }) => {
+  currency: Currency
+}> = ({ plan, title, idrRate, currency }) => {
     
     const { position, entryPrice, stopLoss, takeProfit, confidence } = plan;
     const isLong = position === 'Long';
@@ -112,18 +161,9 @@ const PlanDisplay: React.FC<{
 
     return (
         <div className="space-y-2.5 w-full">
-            {/* Judul Rencana dan Badge Cache */}
+            {/* Judul Rencana (Badge dihapus) */}
             <div className="flex items-center justify-between gap-2">
                 <h4 className="text-sm font-bold text-gray-200">{title}</h4>
-                {isCached !== undefined && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        isCached 
-                            ? 'bg-electric/20 text-electric' 
-                            : 'bg-lime/20 text-lime'
-                    }`}>
-                        {isCached ? 'Dari Cache' : 'Analisis Baru'}
-                    </span>
-                )}
             </div>
             
             {/* Detail Posisi dan Keyakinan */}
@@ -174,27 +214,26 @@ const PlanDisplay: React.FC<{
 
 
 /**
- * Konten utama modal, sekarang menampilkan DUA rencana.
+ * Konten utama modal, di-update untuk menggunakan BestOptionDisplay.
  */
 const AnalysisContent: React.FC<{ result: AnalysisResult, idrRate: number | null, currency: Currency }> = ({ result, idrRate, currency }) => {
-    const { bestOption, currentPricePlan, reasoning, isCachedData } = result;
+    const { bestOption, currentPricePlan, reasoning } = result;
 
     return (
         <div className="space-y-4 w-full animate-fade-in-content" style={{ animation: 'fade-in-content 0.4s ease-out forwards' }}>
             
-            {/* 1. Tampilkan Opsi Terbaik */}
-            <PlanDisplay 
+            {/* 1. Tampilkan Opsi Terbaik (Komponen BARU - Minimalis) */}
+            <BestOptionDisplay 
                 plan={bestOption} 
                 title="Opsi Entry Terbaik (Limit)" 
                 idrRate={idrRate} 
-                currency={currency} 
-                isCached={isCachedData} 
+                currency={currency}
             />
             
             {/* Pemisah */}
             <div className="border-t border-dashed border-white/10 my-3"></div>
 
-            {/* 2. Tampilkan Rencana Harga Saat Ini */}
+            {/* 2. Tampilkan Rencana Harga Saat Ini (Komponen LAMA - Detail) */}
             <PlanDisplay 
                 plan={currentPricePlan} 
                 title="Opsi Harga Saat Ini (Market)" 
@@ -308,14 +347,11 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({
                             </div>
                         </div>
                     </div>
-                     {/* --- PERUBAHAN DISINI --- */}
-                     {/* Kontainer ini sekarang akan diisi oleh 'AnalysisContent' yang baru */}
                      <div className="flex items-center justify-center bg-black/20 rounded-lg p-2 min-h-[240px]">
                         {isLoading && <ProfitAnimation />}
                         {error && !isLoading && <ErrorDisplay title="Analisis Gagal" message={error} />}
                         {analysisResult && !isLoading && <AnalysisContent result={analysisResult} idrRate={idrRate} currency={currency} />}
                      </div>
-                     {/* --- AKHIR PERUBAHAN --- */}
                 </div>
 
                 <div className="col-span-10 lg:col-span-4 space-y-1.5">

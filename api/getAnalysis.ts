@@ -108,8 +108,8 @@ export default async function handler(
         responseMimeType: "application/json",
         responseSchema: analysisSchema as any,
         // --- PERBAIKAN DI SINI ---
-        // Turunkan suhu agar lebih konsisten dan deterministik
-        temperature: 0.2, 
+        // Atur suhu ke 0.0 untuk konsistensi maksimal
+        temperature: 0.0, 
       },
     });
 

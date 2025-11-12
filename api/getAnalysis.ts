@@ -107,8 +107,9 @@ export default async function handler(
       config: {
         responseMimeType: "application/json",
         responseSchema: analysisSchema as any,
-        // --- SUHU 0.5 UNTUK ANALISIS FOKUS & KONSEVATIF ---
-        temperature: 0.5, 
+        // --- PERBAIKAN DI SINI ---
+        // Turunkan suhu agar lebih konsisten dan deterministik
+        temperature: 0.2, 
       },
     });
 

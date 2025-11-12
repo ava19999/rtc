@@ -66,7 +66,7 @@ export default async function handler(
         throw new Error("Kunci API Gemini tidak dikonfigurasi di Vercel.");
     }
 
-    // 6. --- PERUBAHAN HANYA PADA PROMPT REASONING ---
+    // 6. --- PERUBAHAN HANYA PADA PROMPT REASONING (LEBIH KONSERVATIF) ---
     const formattedPrice = currentPrice < 0.01 ? currentPrice.toFixed(8) : currentPrice.toFixed(4);
     const prompt = `
     Anda adalah 'RTC Pro Trader AI', seorang analis teknikal cryptocurrency yang **sangat konservatif dan sangat teliti**.
@@ -83,8 +83,9 @@ export default async function handler(
         * Tentukan apakah masuk di **$${formattedPrice}** (harga saat ini) adalah tindakan yang logis.
         * Tentukan \`entryPrice\` (sebagai $${formattedPrice} atau rentang sangat dekat), \`stopLoss\` (ketat), dan \`takeProfit\` (konservatif) untuk rencana ini. Data ini akan mengisi data JSON utama.
         * Jika masuk di harga saat ini terlalu berisiko, atur \`confidence\` ke "Low".
-    2.  **Analisis Harga Terbaik (Rencana Opsi):**
-        * Cari apakah ada "harga terbaik" (Limit Order) yang lebih aman untuk ditunggu (misal: di S/R terdekat).
+    2.  **Analisis Harga Terbaik (Rencana Opsi - SANGAT KONSERVATIF):**
+        * Cari "harga terbaik" (Limit Order) yang **LEBIH KONSERVATIF LAGI** dan **LEBIH BAGUS** (Risk/Reward lebih baik).
+        * Ini berarti **menunggu pullback yang lebih dalam ke level support yang SANGAT KUAT (untuk Long)** atau rally ke resistance SANGAT KUAT (untuk Short), bukan hanya S/R terdekat.
         * Rencana "harga terbaik" ini HANYA akan dimasukkan ke bagian *atas* dari \`reasoning\`.
 
     **Format Output:**
@@ -92,9 +93,9 @@ export default async function handler(
     -   \`entryPrice\`, \`stopLoss\`, \`takeProfit\`: HARUS mencerminkan RENCANA UTAMA (berdasarkan harga saat ini $${formattedPrice}).
     -   \`confidence\`: "High", "Medium", atau "Low" untuk RENCANA UTAMA (harga saat ini).
     -   \`reasoning\`: 
-        1.  **Bagian Pertama (DI ATAS):** Mulai dengan bagian "OPSI HARGA TERBAIK (Konservatif):". Jelaskan rencana "harga terbaik" (Limit Order) yang paling aman dan profitabel untuk ditunggu (misal: "OPSI HARGA TERBAIK (Konservatif): Rencana paling aman adalah menunggu entry di [harga terbaik] dengan SL di [SL terbaik]... TP di [TP terbaik]. Ini adalah level support kuat..."). Ini adalah rencana yang "bertahan hingga SL atau TP tercapai". Jika harga saat ini sudah terbaik, katakan demikian.
+        1.  **Bagian Pertama (DI ATAS):** Mulai dengan bagian "OPSI HARGA TERBAIK (Sangat Konservatif):". Jelaskan rencana "harga terbaik" (Limit Order) yang paling aman ini. Tekankan bahwa ini adalah **opsi paling aman** untuk R/R terbaik. (Misal: "OPSI HARGA TERBAIK (Sangat Konservatif): Rencana paling aman adalah menunggu pullback lebih dalam ke [harga terbaik]... Ini adalah level support kuat mingguan. Idealnya tunggu konfirmasi pantulan/volume di area ini sebelum masuk. SL di [SL terbaik]... TP di [TP terbaik]."). Ini adalah rencana yang "bertahan hingga SL atau TP tercapai".
         2.  **Bagian Kedua (DI BAWAH):** Tambahkan bagian baru "ANALISIS HARGA SAAT INI:".
-        3.  Di bagian baru ini, jelaskan rencana/konservasi untuk **"Harga Saat Ini"** ($${formattedPrice}), yang datanya Anda masukkan di data utama (entryPrice, stopLoss, takeProfit). (Misal: "ANALISIS HARGA SAAT INI: Masuk di $${formattedPrice} (sesuai data utama) didukung oleh [alasan]... SL di [SL utama] untuk antisipasi... TP konservatif di [TP utama]...").
+        3.  Di bagian baru ini, jelaskan rencana/konservasi untuk **"Harga Saat Ini"** ($${formattedPrice}), yang datanya Anda masukkan di data utama (entryPrice, stopLoss, takeProfit). (Misal: "ANALISIS HARGA SAAT INI: Masuk di $${formattedPrice} (sesuai data utama) memiliki risiko [sebutkan risiko, misal: 'nanggung']... SL di [SL utama] untuk antisipasi... TP konservatif di [TP utama]...").
   `;
     // --- AKHIR DARI PROMPT ---
 

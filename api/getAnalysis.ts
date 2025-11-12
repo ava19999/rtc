@@ -6,10 +6,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { AnalysisResult } from '../types'; 
 
 // 1. AMBIL API KEY DARI VERCEL ENVIRONMENT VARIABLES (AMAN)
-// Ini HANYA berjalan di server, tidak pernah terlihat oleh klien
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 
-// 2. Salin skema yang sama dari geminiService.ts lama Anda
+// 2. SKEMA DATA UTAMA (TETAP FOKUS PADA HARGA SAAT INI - TIDAK DIUBAH)
 const analysisSchema = {
   type: Type.OBJECT,
   properties: {
@@ -19,23 +18,25 @@ const analysisSchema = {
     },
     entryPrice: {
       type: Type.STRING,
-      description: 'The recommended entry price or range. Return ONLY the number or range (e.g., "68000-68500" or "67000"), WITHOUT any currency symbols like $.',
+      // Data utama adalah untuk HARGA SAAT INI
+      description: 'The recommended entry price based on the CURRENT MARKET PRICE, or a very tight range around it. Return ONLY the number or range (e.g., "68000-68100" or "67000"), WITHOUT any currency symbols like $.',
     },
     stopLoss: {
       type: Type.STRING,
-      description: 'The recommended price for a stop-loss. Return ONLY the number (e.g., "67000"), WITHOUT any currency symbols like $.',
+      description: 'The recommended price for a stop-loss (relative to the entryPrice). Return ONLY the number (e.g., "67000"), WITHOUT any currency symbols like $.',
     },
     takeProfit: {
         type: Type.STRING,
-        description: 'The recommended take-profit target. Return ONLY the number (e.g., "72000"), WITHOUT any currency symbols like $.',
+        description: 'The recommended take-profit target (relative to the entryPrice). Return ONLY the number (e.g., "72000"), WITHOUT any currency symbols like $.',
     },
     confidence: {
       type: Type.STRING,
-      description: 'The confidence level of this analysis (e.g., "High", "Medium", "Low").',
+      description: 'The confidence level for the CURRENT MARKET PRICE plan (e.g., "High", "Medium", "Low").',
     },
     reasoning: {
       type: Type.STRING,
-      description: 'A brief, professional rationale for the chosen price points and position, grounded in technical or market analysis principles.',
+      // Deskripsi reasoning diubah untuk mencerminkan urutan BARU
+      description: 'A brief rationale starting with the "OPSI HARGA TERBAIK", followed by the "ANALISIS HARGA SAAT INI" (which explains the main data).',
     },
   },
   required: ['position', 'entryPrice', 'stopLoss', 'takeProfit', 'confidence', 'reasoning'],
@@ -65,33 +66,35 @@ export default async function handler(
         throw new Error("Kunci API Gemini tidak dikonfigurasi di Vercel.");
     }
 
-    // 6. --- PROMPT FINAL DENGAN SEMUA INSTRUKSI ---
+    // 6. --- PERUBAHAN HANYA PADA PROMPT REASONING ---
     const formattedPrice = currentPrice < 0.01 ? currentPrice.toFixed(8) : currentPrice.toFixed(4);
     const prompt = `
     Anda adalah 'RTC Pro Trader AI', seorang analis teknikal cryptocurrency yang **sangat konservatif dan sangat teliti**.
-    Tugas utama Anda adalah memberikan analisis perdagangan untuk ${cryptoName} (harga saat ini $${formattedPrice}) dengan **fokus utama pada profit yang konsisten dan manajemen risiko yang ketat.**
+    Harga saat ini untuk ${cryptoName} adalah **$${formattedPrice}**.
+    Tugas utama Anda adalah memberikan **rencana trading utama (primary plan) berdasarkan harga saat ini**, dan memberikan opsi konservatif (harga terbaik) di *bagian atas* reasoning.
 
     **Prinsip Utama (WAJIB DIPATUHI):**
-    1.  **Prioritaskan Keamanan:** Lebih baik tidak trading daripada rugi.
-    2.  **Profit Konsisten (Paling Penting):** Targetkan profit yang realistis dan sangat mungkin tercapai (high-probability). **Lebih baik profit kecil tapi pasti daripada target ambisius yang mungkin gagal.** Sesuai permintaan: "asal profit saja sudah cukup".
-    3.  **Stop Loss Ketat:** Tentukan Stop Loss (SL) yang logis dan ketat untuk meminimalisir kerugian.
-    4.  **Waspada Psikologi & Jebakan (Market Traps):** Ini adalah prioritas. Analisis HARUS mempertimbangkan kemungkinan "fakeouts" (breakout palsu), "stop loss hunt", atau "bull/bear traps". **Jangan tertipu oleh chart.** Jika sebuah pergerakan terlihat "terlalu jelas", berikan sinyal dengan sangat hati-hati atau "Low" confidence.
+    1.  **Prioritaskan Keamanan & Profit Konsisten:** "asal profit saja sudah cukup". Rencana trading utama harus memiliki SL yang ketat dan TP yang realistis (high-probability) dari harga saat ini.
+    2.  **Waspada Psikologi & Jebakan (Market Traps):** Analisis HARUS mempertimbangkan kemungkinan "fakeouts" (breakout palsu) dan "stop loss hunt". Jangan tertipu oleh chart.
+    3.  **Konfirmasi Volume:** **WAJIB** gunakan volume untuk mengkonfirmasi sinyal.
 
     **Kerangka Analisis Wajib (Teliti):**
-    Analisis Anda HARUS menggabungkan beberapa prinsip inti berikut:
-    1.  **Support & Resistance (S/R):** Gunakan level S/R terdekat untuk menentukan titik Entry, SL, dan TP.
-    2.  **Analisis Volume:** **WAJIB** gunakan volume untuk mengkonfirmasi sinyal. Breakout dengan volume rendah adalah tanda bahaya (potensi jebakan). Pergerakan impulsif harus didukung volume kuat.
-    3.  **WaveTrend Oscillator:** Fokus pada persilangan dan kondisi ekstrem (oversold/overbought) sebagai konfirmasi.
-    4.  **Divergensi:** Cari divergensi bullish atau bearish pada RSI atau MFI sebagai sinyal awal.
-    5.  **Momentum (MFI & RSI):** Gunakan untuk mengukur tekanan beli/jual saat ini.
-    6.  **Konfluensi & Psikologi:** Berikan sinyal HANYA jika minimal 2-3 indikator di atas saling mendukung DAN sinyal tersebut masuk akal secara psikologis (bukan jebakan yang jelas).
+    1.  **Analisis Harga Saat Ini (Rencana Utama):**
+        * Tentukan apakah masuk di **$${formattedPrice}** (harga saat ini) adalah tindakan yang logis.
+        * Tentukan \`entryPrice\` (sebagai $${formattedPrice} atau rentang sangat dekat), \`stopLoss\` (ketat), dan \`takeProfit\` (konservatif) untuk rencana ini. Data ini akan mengisi data JSON utama.
+        * Jika masuk di harga saat ini terlalu berisiko, atur \`confidence\` ke "Low".
+    2.  **Analisis Harga Terbaik (Rencana Opsi):**
+        * Cari apakah ada "harga terbaik" (Limit Order) yang lebih aman untuk ditunggu (misal: di S/R terdekat).
+        * Rencana "harga terbaik" ini HANYA akan dimasukkan ke bagian *atas* dari \`reasoning\`.
 
     **Format Output:**
     -   Ikuti skema JSON yang disediakan dengan ketat.
-    -   Sediakan **SATU target 'takeProfit' yang konservatif** dan masuk akal (high-probability).
-    -   'confidence': Gunakan "High", "Medium", atau "Low". **Jangan ragu memberikan "Low" jika pasar volatil atau sinyal tidak kuat/terlihat seperti jebakan.**
-    -   'reasoning': Berikan penjelasan singkat dan padat dalam **Bahasa Indonesia**. Jelaskan MENGAPA titik-titik itu dipilih berdasarkan kerangka analisis (misal: "Entry dekat support, SL di bawah support kuat...") **dan sebutkan secara singkat mengapa ini BUKAN jebakan (misal: 'dikonfirmasi oleh volume').**
-    -   Pastikan semua harga (Entry, SL, TP) masuk akal relatif terhadap harga saat ini.
+    -   \`entryPrice\`, \`stopLoss\`, \`takeProfit\`: HARUS mencerminkan RENCANA UTAMA (berdasarkan harga saat ini $${formattedPrice}).
+    -   \`confidence\`: "High", "Medium", atau "Low" untuk RENCANA UTAMA (harga saat ini).
+    -   \`reasoning\`: 
+        1.  **Bagian Pertama (DI ATAS):** Mulai dengan bagian "OPSI HARGA TERBAIK (Konservatif):". Jelaskan rencana "harga terbaik" (Limit Order) yang paling aman dan profitabel untuk ditunggu (misal: "OPSI HARGA TERBAIK (Konservatif): Rencana paling aman adalah menunggu entry di [harga terbaik] dengan SL di [SL terbaik]... TP di [TP terbaik]. Ini adalah level support kuat..."). Ini adalah rencana yang "bertahan hingga SL atau TP tercapai". Jika harga saat ini sudah terbaik, katakan demikian.
+        2.  **Bagian Kedua (DI BAWAH):** Tambahkan bagian baru "ANALISIS HARGA SAAT INI:".
+        3.  Di bagian baru ini, jelaskan rencana/konservasi untuk **"Harga Saat Ini"** ($${formattedPrice}), yang datanya Anda masukkan di data utama (entryPrice, stopLoss, takeProfit). (Misal: "ANALISIS HARGA SAAT INI: Masuk di $${formattedPrice} (sesuai data utama) didukung oleh [alasan]... SL di [SL utama] untuk antisipasi... TP konservatif di [TP utama]...").
   `;
     // --- AKHIR DARI PROMPT ---
 
@@ -102,8 +105,8 @@ export default async function handler(
       config: {
         responseMimeType: "application/json",
         responseSchema: analysisSchema as any,
-        // --- DIKEMBALIKAN KE 0.5 SESUAI PERMINTAAN ---
-        temperature: 0.5, // Sesuai instruksi: fokus pada hasil yang konsisten dan tidak "kreatif"
+        // --- SUHU 0.5 UNTUK ANALISIS FOKUS & KONSEVATIF ---
+        temperature: 0.5, 
       },
     });
 

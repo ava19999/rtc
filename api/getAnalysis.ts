@@ -57,8 +57,8 @@ const tradePlanSchema = {
   required: ['position', 'entryPrice', 'stopLoss', 'takeProfit', 'confidence'],
 };
 
-// --- PERUBAHAN DI SINI ---
 // 3. Skema untuk meminta KEDUA rencana (Cache Tidak Valid)
+// 'currentPricePlan' dibuat opsional (dihapus dari 'required')
 const fullAnalysisSchema = {
   type: Type.OBJECT,
   properties: {
@@ -68,32 +68,32 @@ const fullAnalysisSchema = {
     },
     currentPricePlan: {
       ...tradePlanSchema,
-      description: "The trade plan for entering at the current market price, based on the 5-Min ORB strategy. Omit this field (set to null) if the strategy says to WAIT."
+      description: "The scalping plan for the current price. Omit this field (set to null) if the 3-step check fails (recommends 'WAIT')."
     },
     reasoning: {
       type: Type.STRING,
-      description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain why the 3-step checklist passed or FAILED."
+      description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain why the 3-step scalping check passed or FAILED."
     },
   },
-  required: ['bestOption', 'reasoning'], // 'currentPricePlan' dibuat opsional
+  required: ['bestOption', 'reasoning'], 
 };
 
 // 4. Skema untuk meminta HANYA rencana harga saat ini (Cache Valid)
+// 'currentPricePlan' dibuat opsional (dihapus dari 'required')
 const currentPriceOnlySchema = {
     type: Type.OBJECT,
     properties: {
       currentPricePlan: {
         ...tradePlanSchema,
-        description: "The trade plan for entering at the current market price, based on the 5-Min ORB strategy. Omit this field (set to null) if the strategy says to WAIT."
+        description: "The scalping plan for the current price. Omit this field (set to null) if the 3-step check fails (recommends 'WAIT')."
       },
       reasoning: {
         type: Type.STRING,
-        description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain why the 3-step checklist passed or FAILED."
+        description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain why the 3-step scalping check passed or FAILED."
       },
     },
-    required: ['reasoning'], // 'currentPricePlan' dibuat opsional
+    required: ['reasoning'], 
 };
-// --- AKHIR PERUBAHAN ---
 
 
 // Fungsi helper untuk memanggil AI
@@ -104,7 +104,7 @@ async function callGemini(prompt: string, schema: any) {
     config: {
       responseMimeType: "application/json",
       responseSchema: schema as any,
-      temperature: 0.5, // Sedikit kreativitas untuk analisis
+      temperature: 0.5,
     },
   });
 
@@ -127,7 +127,6 @@ export default async function handler(
   }
 
   try {
-    // 6. Ambil data dari body, tambahkan cryptoId
     const { cryptoName, currentPrice, cryptoId } = req.body;
 
     if (!cryptoName || currentPrice === undefined || !cryptoId) {
@@ -149,7 +148,7 @@ export default async function handler(
     let isCacheValid = false;
     let cachedBestOption: TradePlan | null = null;
 
-    // --- LOGIKA CACHE ---
+    // --- LOGIKA CACHE (Tetap sama) ---
     try {
         const snapshot = await cacheRef.once('value');
         const cachedData: TradePlan | null = snapshot.val();
@@ -187,49 +186,41 @@ export default async function handler(
 
     if (isCacheValid && cachedBestOption) {
       // --- KASUS 1: CACHE VALID ---
-      // Minta HANYA 'currentPricePlan' dan 'reasoning'-nya
+      // Minta HANYA 'currentPricePlan' dan 'reasoning'-nya menggunakan LOGIKA BARU
       
-      // --- PERUBAHAN PROMPT ---
+      // --- PROMPT BARU (LEBIH AMAN) ---
       const promptCurrentOnly = `
-        Persona: 'RTC Pro Trader AI'. Anda adalah scalper 5 menit yang SANGAT DISIPLIN.
+        Persona: 'RTC Pro Trader AI'. Anda adalah scalper 5 menit yang disiplin dan realistis.
         
-        STRATEGI WAJIB ANDA: "DataTrader 5-Min Opening Range Breakout (ORB)".
+        STRATEGI WAJIB (3-LANGKAH KONFLUENS):
+        1.  Konteks (Tren 1 Jam): Cek tren utama (misal: 1H EMA 50). JANGAN melawan tren ini.
+        2.  Zona (S/R 5-Menit): Harga HARUS berada di zona Support/Resistance (S/R) 5 menit yang valid.
+        3.  Konfirmasi (RSI/Momentum): HARUS ada konfirmasi (misal: RSI oversold di support saat uptrend).
+
         Harga ${cryptoName} saat ini: **$${formattedPrice}**.
 
         TUGAS:
-        Jalankan 3-LANGKAH CEKLIS berikut untuk harga saat ini ($${formattedPrice}).
+        Analisis harga saat ini ($${formattedPrice}) menggunakan 3-Langkah Konfluens di atas.
 
-        1.  **CEKLIS 1: Identifikasi Range 5 Menit.**
-            * Apakah sudah terbentuk 'Opening Range' 5 menit yang jelas (misal, 1-2 jam terakhir)?
-            * Tentukan Support (Low) dan Resistance (High) dari range tersebut.
-
-        2.  **CEKLIS 2: Konfirmasi Breakout/Breakdown.**
-            * Apakah harga saat ini ($${formattedPrice}) sudah *tutup* (close) di luar range itu?
-            * Jika ya, apakah ini breakout (di atas High) atau breakdown (di bawah Low)?
-
-        3.  **CEKLIS 3: Entry (Kriteria Saat Ini).**
-            * Apakah harga saat ini berada di titik entry yang ideal (misal: sedang melakukan retest ke range, atau baru saja breakout)?
-
-        OUTPUT:
-        1.  **Jika SEMUA 3 ceklis lolos (misal: Range ada, Breakout terkonfirmasi, dan harga saat ini ideal untuk entry):**
-            * Buat \`currentPricePlan\` (Long/Short) dengan SL ketat (misal: di dalam range) dan TP 1.5R.
+        1.  **Jika SEMUA 3 langkah terpenuhi (Konteks, Zona, Konfirmasi):**
+            * Buat \`currentPricePlan\` (Long/Short) dengan SL ketat dan TP realistis (misal 1.5R).
             * Set \`confidence\` ke "Medium" atau "High".
-            * Di \`reasoning\`: Jelaskan bahwa 3 ceklis lolos.
+            * Di \`reasoning\`: Jelaskan bahwa 3 ceklis lolos (Misal: "Sinyal LONG: Tren 1 Jam Bullish, harga memantul di Support 5-Menit, dan RSI Oversold.").
 
-        2.  **Jika SATU SAJA ceklis GAGAL (misal: harga masih di dalam range, atau sudah breakout tapi terlalu jauh):**
-            * Set \`currentPricePlan\` ke \`null\` (atau jangan sertakan field-nya).
-            * Di \`reasoning\`: Beri tahu statusnya. Contoh: "REKOMENDASI: TUNGGU. Gagal Ceklis 2: Harga masih di dalam range 5 menit. Belum ada konfirmasi breakout."
+        2.  **Jika SATU SAJA langkah gagal:**
+            * Set \`currentPricePlan\` ke \`null\`.
+            * Di \`reasoning\`: Jelaskan dengan TEPAT mengapa gagal dan sarankan "TUNGGU".
+            * (Contoh Gagal Cek 2: "REKOMENDASI: TUNGGU. Tren 1 Jam Bullish, tapi harga saat ini di 'no-man's-land' (jauh dari support). Tunggu pullback ke support.")
+            * (Contoh Gagal Cek 1: "REKOMENDASI: TUNGGU. Harga di support 5-menit, tapi tren 1 Jam masih Bearish. Terlalu berisiko untuk Long.")
       `;
-      // --- AKHIR PROMPT ---
+      // --- AKHIR PROMPT BARU ---
       
-      console.log(`[getAnalysis] Cache VALID. Meminta AI (Mode DataTrader 5-Min ORB) HANYA untuk rencana harga saat ini...`);
+      console.log(`[getAnalysis] Cache VALID. Menjalankan AI (Mode Scalping 3-Langkah) untuk harga saat ini...`);
       const freshData = await callGemini(promptCurrentOnly, currentPriceOnlySchema);
 
       const finalResult: AnalysisResult = {
         bestOption: cachedBestOption,
-        // --- PERUBAHAN DI SINI ---
         currentPricePlan: freshData.currentPricePlan || null, // Pastikan null jika tidak ada
-        // --- AKHIR PERUBAHAN ---
         reasoning: freshData.reasoning,
         isCachedData: true
       };
@@ -240,9 +231,9 @@ export default async function handler(
       // --- KASUS 2: CACHE TIDAK VALID / KOSONG ---
       // Minta KEDUA rencana
       
-      // --- PERUBAHAN PROMPT ---
+      // --- PROMPT BARU (LEBIH AMAN) ---
       const promptFull = `
-        Persona: 'RTC Pro Trader AI'. Konservatif, teliti, dan sangat ketat untuk 'bestOption'. Sangat disiplin dan mekanis untuk 'currentPricePlan'.
+        Persona: 'RTC Pro Trader AI'. Konservatif untuk 'bestOption', Disiplin untuk 'currentPricePlan'.
 
         Harga ${cryptoName} saat ini: **$${formattedPrice}**.
 
@@ -250,25 +241,25 @@ export default async function handler(
         Anda HARUS menghasilkan DUA output terpisah.
 
         1.  **Rencana 'Opsi Terbaik' (untuk \`bestOption\`):**
-            * Gunakan analisis konservatif (S/R Kunci, Volume, Psikologi Pasar).
+            * Gunakan analisis konservatif (S/R Kunci Harian/4 Jam, Volume, Psikologi Pasar).
             * Cari "harga terbaik" (Limit Order) yang paling high-probability.
             * Fokus pada S/R KUNCI yang valid (terkonfirmasi Volume) yang masuk akal untuk ditunggu (pullback/retest).
             * Tentukan: \`position\`, \`entryPrice\` (harga limit), \`stopLoss\` (KETAT), \`takeProfit\` (konsisten), \`confidence\` ("High" atau "Medium").
 
         2.  **Rencana 'Harga Saat Ini' (untuk \`currentPricePlan\` dan \`reasoning\`):**
-            * WAJIB Terapkan STRATEGI "DataTrader 5-Min Opening Range Breakout (ORB)".
-            * **CEKLIS 1:** Identifikasi 'Opening Range' 5 menit terakhir yang jelas (High/Low).
-            * **CEKLIS 2:** Cek apakah harga ($${formattedPrice}) sudah *tutup* di luar range itu (Breakout/Breakdown).
-            * **CEKLIS 3:** Cek apakah harga ($${formattedPrice}) ada di titik entry ideal (misal: retest) atau sudah terlalu jauh.
-            * **OUTPUT (Jika 3 Ceklis Lolos):** Buat \`currentPricePlan\` (Long/Short) sesuai hasil breakout.
+            * WAJIB Terapkan STRATEGI SCALPING 3-LANGKAH KONFLUENS (Konteks, Zona, Konfirmasi).
+            * **CEK 1 (Konteks):** Cek tren 1 Jam.
+            * **CEK 2 (Zona):** Cek apakah harga ($${formattedPrice}) di S/R 5-menit yang valid.
+            * **CEK 3 (Konfirmasi):** Cek apakah ada konfirmasi momentum/RSI di zona tersebut.
+            *
+            * **OUTPUT (Jika 3 Ceklis Lolos):** Buat \`currentPricePlan\` (Long/Short) sesuai hasil konfluens.
             * **OUTPUT (Jika 1 Ceklis Gagal):** Set \`currentPricePlan\` ke \`null\`.
-            * **Reasoning (untuk \`reasoning\`):** Jelaskan dalam Bahasa Indonesia hasil dari 3-langkah ceklis ORB. (Misal: "REKOMENDASI: TUNGGU. Gagal Ceklis 2: Harga masih di dalam range 5 menit. Belum ada sinyal breakout.")
+            * **Reasoning (untuk \`reasoning\`):** Jelaskan dalam Bahasa Indonesia hasil dari 3-langkah ceklis. (Misal: "REKOMENDASI: TUNGGU. Gagal Cek 2: Harga di 'no-man's-land'. Tunggu pullback ke support 5-menit.").
             * JANGAN sebutkan 'Opsi Terbaik' di dalam reasoning.
       `;
-      // --- AKHIR PROMPT ---
+      // --- AKHIR PROMPT BARU ---
 
-      console.log(`[getAnalysis] Cache TIDAK VALID. Meminta AI untuk 'bestOption' (Umum) dan 'currentPricePlan' (Mode DataTrader 5-Min ORB)...`);
-      // Tipe diubah untuk mencerminkan bahwa currentPricePlan opsional
+      console.log(`[getAnalysis] Cache TIDAK VALID. Meminta AI untuk 'bestOption' (Umum) dan 'currentPricePlan' (Mode Scalping 3-Langkah)...`);
       const fullResult = await callGemini(promptFull, fullAnalysisSchema) as Omit<AnalysisResult, 'isCachedData' | 'currentPricePlan'> & { currentPricePlan?: TradePlan };
 
 
@@ -278,16 +269,13 @@ export default async function handler(
         console.log(`[getAnalysis] 'bestOption' baru disimpan ke cache untuk ${cryptoId}.`);
       } catch (e) {
         console.error(`[getAnalysis] GAGAL menyimpan 'bestOption' ke cache:`, (e as Error).message);
-        // Jangan hentikan proses, kirim saja datanya
       }
       
       const finalResult: AnalysisResult = {
         bestOption: fullResult.bestOption,
-        // --- PERUBAHAN DI SINI ---
         currentPricePlan: fullResult.currentPricePlan || null, // Pastikan null jika tidak ada
-        // --- AKHIR PERUBAHAN ---
         reasoning: fullResult.reasoning,
-        isCachedData: false // Tandai bahwa ini adalah data baru
+        isCachedData: false 
       };
 
       return res.status(200).json(finalResult);

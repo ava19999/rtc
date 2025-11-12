@@ -72,20 +72,6 @@ const HomePage: React.FC<HomePageProps> = ({
   const [filteredCoinList, setFilteredCoinList] = useState<CoinListItem[]>([]);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  // --- PERUBAHAN DI SINI: State untuk caching ---
-  const [analysisCache, setAnalysisCache] = useState<{ 
-    [coinId: string]: { 
-      result: AnalysisResult; 
-      tickers: ExchangeTicker[];
-      tickersError: string | null;
-      timestamp: number;
-    } 
-  }>({});
-  // Atur durasi cache (5 menit)
-  const ANALYSIS_CACHE_DURATION = 5 * 60 * 1000; 
-  // --- AKHIR PERUBAHAN ---
-
-
   const fetchDominanceData = useCallback(async () => {
     setIsDominanceLoading(true);
     try {
@@ -128,95 +114,22 @@ const HomePage: React.FC<HomePageProps> = ({
     onSelectCoin(coinId);
   }, [onSelectCoin]);
 
-  // --- PERUBAHAN DI SINI: Logika handleAnalyze diubah total ---
   const handleAnalyze = useCallback(async (crypto: CryptoData) => {
-    const now = Date.now();
-    const cachedData = analysisCache[crypto.id];
-
-    // 1. Cek apakah ada cache yang valid
-    if (cachedData && (now - cachedData.timestamp < ANALYSIS_CACHE_DURATION)) {
-      console.log("Menggunakan hasil analisis dari cache untuk:", crypto.id);
-      onIncrementAnalysisCount(crypto.id); // Tetap hitung klik
-      setSelectedCrypto(crypto);
-      setIsModalOpen(true);
-      
-      // 2. Atur semua state dari cache
-      setAnalysisResult(cachedData.result);
-      setExchangeTickers(cachedData.tickers);
-      setTickersError(cachedData.tickersError);
-      
-      // 3. Pastikan loading state mati
-      setIsAnalysisLoading(false);
-      setAnalysisError(null);
-      setIsTickersLoading(false);
-      
-      return; // Selesai, jangan fetch ke API
-    }
-
-    // 4. Jika tidak ada cache atau cache kedaluwarsa, fetch baru
-    console.log("Mengambil analisis baru untuk:", crypto.id);
     onIncrementAnalysisCount(crypto.id);
-    setSelectedCrypto(crypto);
-    setIsModalOpen(true);
-    
-    // 5. Reset state loading
+    setSelectedCrypto(crypto); setIsModalOpen(true);
     setIsAnalysisLoading(true); setAnalysisError(null); setAnalysisResult(null);
     setIsTickersLoading(true); setTickersError(null); setExchangeTickers([]);
 
-    try {
-      // 6. Jalankan kedua fetch secara paralel
-      const [analysisRes, tickersRes] = await Promise.allSettled([
-        fetchCryptoAnalysis(crypto.name, crypto.price),
-        fetchExchangeTickers(crypto.id)
-      ]);
-
-      let fetchedAnalysis: AnalysisResult | null = null;
-      let fetchedTickers: ExchangeTicker[] = [];
-      let fetchedTickersError: string | null = null;
-
-      // 7. Tangani hasil analisis
-      if (analysisRes.status === 'fulfilled') {
-        setAnalysisResult(analysisRes.value);
-        fetchedAnalysis = analysisRes.value;
-      } else {
-        // Jika analisis gagal
-        setAnalysisError(analysisRes.reason.message);
-      }
-      setIsAnalysisLoading(false);
-
-      // 8. Tangani hasil ticker
-      if (tickersRes.status === 'fulfilled') {
-        setExchangeTickers(tickersRes.value);
-        fetchedTickers = tickersRes.value;
-      } else {
-        // Jika ticker gagal
-        setTickersError(tickersRes.reason.message);
-        fetchedTickersError = tickersRes.reason.message;
-      }
-      setIsTickersLoading(false);
-
-      // 9. Simpan ke cache HANYA jika analisis AI berhasil
-      if (fetchedAnalysis) {
-        setAnalysisCache(prev => ({
-          ...prev,
-          [crypto.id]: {
-            result: fetchedAnalysis,
-            tickers: fetchedTickers,
-            tickersError: fetchedTickersError,
-            timestamp: now
-          }
-        }));
-      }
-
-    } catch (err: any) {
-      // Cadangan jika Promise.allSettled gagal (seharusnya tidak)
-      console.error("Kesalahan tak terduga di handleAnalyze:", err);
-      setAnalysisError(err.message || "Terjadi kesalahan.");
-      setIsAnalysisLoading(false);
-      setIsTickersLoading(false);
-    }
-  }, [onIncrementAnalysisCount, analysisCache, ANALYSIS_CACHE_DURATION]);
-  // --- AKHIR PERUBAHAN ---
+    fetchCryptoAnalysis(crypto.name, crypto.price)
+      .then(setAnalysisResult)
+      .catch(err => setAnalysisError(err.message))
+      .finally(() => setIsAnalysisLoading(false));
+    
+    fetchExchangeTickers(crypto.id)
+      .then(setExchangeTickers)
+      .catch(err => setTickersError(err.message))
+      .finally(() => setIsTickersLoading(false));
+  }, [onIncrementAnalysisCount]);
 
   const closeModal = () => { setIsModalOpen(false); setSelectedCrypto(null); };
   

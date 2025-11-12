@@ -40,7 +40,6 @@ async function fetchTrendingCoinsServerSide(): Promise<TrendingCoin[]> {
   }
   const trendingData = await response.json();
   
-  // --- PERUBAHAN DI SINI ---
   // Ubah .slice(0, 11) menjadi .slice(0, 16)
   const trendingCoins: TrendingCoin[] = trendingData.coins
     .map((c: any) => ({
@@ -48,28 +47,58 @@ async function fetchTrendingCoinsServerSide(): Promise<TrendingCoin[]> {
       name: c.item.name
     }))
     .slice(0, 16);
-  // --- AKHIR PERUBAHAN ---
     
   return trendingCoins;
 }
 
+// --- PERUBAHAN DIMULAI DI FUNGSI INI ---
 async function postMessageToRoom(db: admin.database.Database, coinNames: string) {
+  // Tentukan batas riwayat chat
+  const HISTORY_LIMIT = 10;
+
   try {
     const messageListRef = db.ref(`messages/${TRENDING_ROOM_ID}`);
-    const newMessageRef = messageListRef.push(); 
     
+    // 1. Post pesan baru
+    const newMessageRef = messageListRef.push(); 
     const systemMessage = {
       type: 'system',
       text: `📈 Peluang Pasar Baru Terdeteksi: ${coinNames}`,
       timestamp: admin.database.ServerValue.TIMESTAMP
     };
-    
     await newMessageRef.set(systemMessage);
     console.log(`[checkTrendingCoins] Berhasil mem-posting pesan sistem ke room ${TRENDING_ROOM_ID}`);
+
+    // 2. Logika untuk memangkas (trim) riwayat chat
+    // Ambil snapshot dari semua pesan di room ini, diurutkan berdasarkan kunci (otomatis kronologis)
+    const snapshot = await messageListRef.orderByKey().once('value');
+    const currentCount = snapshot.numChildren();
+    
+    // Jika jumlah pesan melebihi batas
+    if (currentCount > HISTORY_LIMIT) {
+      const messagesToDelete = currentCount - HISTORY_LIMIT;
+      const updates: { [key: string]: null } = {};
+      let i = 0;
+      
+      // Loop melalui snapshot (yang sudah terurut dari terlama ke terbaru)
+      snapshot.forEach(child => {
+        // Tandai pesan-pesan terlama untuk dihapus
+        if (i < messagesToDelete) {
+          updates[child.key!] = null; // Menyetel nilai ke null akan menghapusnya
+          i++;
+        }
+      });
+
+      // Hapus semua pesan lama dalam satu operasi update
+      await messageListRef.update(updates);
+      console.log(`[checkTrendingCoins] Memangkas riwayat: ${messagesToDelete} pesan lama dihapus.`);
+    }
+
   } catch (e) {
-    console.error(`[checkTrendingCoins] Gagal mem-posting pesan ke room:`, (e as Error).message);
+    console.error(`[checkTrendingCoins] Gagal mem-posting atau memangkas pesan ke room:`, (e as Error).message);
   }
 }
+// --- AKHIR PERUBAHAN ---
 
 export default async (req: VercelRequest, res: VercelResponse) => {
   // Kita ubah dari POST ke GET, agar Uptime Robot bisa memanggilnya
@@ -128,7 +157,7 @@ export default async (req: VercelRequest, res: VercelResponse) => {
       };
       
       await admin.messaging().send(fcmMessage);
-      await postMessageToRoom(db, coinNames);
+      await postMessageToRoom(db, coinNames); // <- Fungsi ini sekarang juga akan memangkas riwayat
       
       notificationSent = true;
       message = `Koin baru ditemukan: ${coinNames}. Notifikasi & pesan room terkirim.`;

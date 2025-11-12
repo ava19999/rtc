@@ -72,7 +72,7 @@ const fullAnalysisSchema = {
     },
     reasoning: {
       type: Type.STRING,
-      description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain why the 3-step scalping check passed or FAILED."
+      description: "A natural language rationale in Indonesian *only* for the 'currentPricePlan'. Explain *why* to trade or WAIT, without mentioning 'steps' or 'checklists'."
     },
   },
   required: ['bestOption', 'reasoning'], 
@@ -89,7 +89,7 @@ const currentPriceOnlySchema = {
       },
       reasoning: {
         type: Type.STRING,
-        description: "A brief, clear rationale in Indonesian *only* for the 'currentPricePlan'. Explain why the 3-step scalping check passed or FAILED."
+        description: "A natural language rationale in Indonesian *only* for the 'currentPricePlan'. Explain *why* to trade or WAIT, without mentioning 'steps' or 'checklists'."
       },
     },
     required: ['reasoning'], 
@@ -186,9 +186,9 @@ export default async function handler(
 
     if (isCacheValid && cachedBestOption) {
       // --- KASUS 1: CACHE VALID ---
-      // Minta HANYA 'currentPricePlan' dan 'reasoning'-nya menggunakan LOGIKA BARU
+      // Minta HANYA 'currentPricePlan' dan 'reasoning'-nya
       
-      // --- PROMPT BARU (LEBIH AMAN) ---
+      // --- PERUBAHAN PROMPT (BAHASA ALAMI) ---
       const promptCurrentOnly = `
         Persona: 'RTC Pro Trader AI'. Anda adalah scalper 5 menit yang disiplin dan realistis.
         
@@ -205,15 +205,15 @@ export default async function handler(
         1.  **Jika SEMUA 3 langkah terpenuhi (Konteks, Zona, Konfirmasi):**
             * Buat \`currentPricePlan\` (Long/Short) dengan SL ketat dan TP realistis (misal 1.5R).
             * Set \`confidence\` ke "Medium" atau "High".
-            * Di \`reasoning\`: Jelaskan bahwa 3 ceklis lolos (Misal: "Sinyal LONG: Tren 1 Jam Bullish, harga memantul di Support 5-Menit, dan RSI Oversold.").
+            * Di \`reasoning\`: Tulis ulasan alami dalam Bahasa Indonesia. JANGAN sebutkan "Langkah 1" atau "Ceklis 2". Langsung ke intinya. (Misal: "Peluang LONG: Tren 1 Jam sedang Bullish, dan harga saat ini memantul dari support 5 menit. RSI juga menunjukkan jenuh jual, mengkonfirmasi momentum beli.")
 
         2.  **Jika SATU SAJA langkah gagal:**
             * Set \`currentPricePlan\` ke \`null\`.
-            * Di \`reasoning\`: Jelaskan dengan TEPAT mengapa gagal dan sarankan "TUNGGU".
-            * (Contoh Gagal Cek 2: "REKOMENDASI: TUNGGU. Tren 1 Jam Bullish, tapi harga saat ini di 'no-man's-land' (jauh dari support). Tunggu pullback ke support.")
-            * (Contoh Gagal Cek 1: "REKOMENDASI: TUNGGU. Harga di support 5-menit, tapi tren 1 Jam masih Bearish. Terlalu berisiko untuk Long.")
+            * Di \`reasoning\`: Tulis ulasan alami (Bahasa Indonesia) mengapa harus TUNGGU. JANGAN sebutkan "Langkah 1" atau "Ceklis 2".
+            * (Contoh Gagal Cek 2: "REKOMENDASI: TUNGGU. Tren 1 Jam memang Bullish, tapi harga saat ini mengambang di 'no-man's-land', terlalu jauh dari support. Sebaiknya tunggu harga pullback ke area support $XX.")
+            * (Contoh Gagal Cek 1: "REKOMENDASI: TUNGGU. Meskipun harga di support 5 menit, tren 1 Jam masih Bearish. Terlalu berisiko membuka posisi Long melawan tren.")
       `;
-      // --- AKHIR PROMPT BARU ---
+      // --- AKHIR PERUBAHAN PROMPT ---
       
       console.log(`[getAnalysis] Cache VALID. Menjalankan AI (Mode Scalping 3-Langkah) untuk harga saat ini...`);
       const freshData = await callGemini(promptCurrentOnly, currentPriceOnlySchema);
@@ -231,7 +231,7 @@ export default async function handler(
       // --- KASUS 2: CACHE TIDAK VALID / KOSONG ---
       // Minta KEDUA rencana
       
-      // --- PROMPT BARU (LEBIH AMAN) ---
+      // --- PERUBAHAN PROMPT (BAHASA ALAMI) ---
       const promptFull = `
         Persona: 'RTC Pro Trader AI'. Konservatif untuk 'bestOption', Disiplin untuk 'currentPricePlan'.
 
@@ -254,10 +254,12 @@ export default async function handler(
             *
             * **OUTPUT (Jika 3 Ceklis Lolos):** Buat \`currentPricePlan\` (Long/Short) sesuai hasil konfluens.
             * **OUTPUT (Jika 1 Ceklis Gagal):** Set \`currentPricePlan\` ke \`null\`.
-            * **Reasoning (untuk \`reasoning\`):** Jelaskan dalam Bahasa Indonesia hasil dari 3-langkah ceklis. (Misal: "REKOMENDASI: TUNGGU. Gagal Cek 2: Harga di 'no-man's-land'. Tunggu pullback ke support 5-menit.").
+            * **Reasoning (untuk \`reasoning\`):** Tulis ulasan alami (Bahasa Indonesia) mengapa harus TUNGGU atau mengapa sinyal valid. JANGAN sebutkan "Langkah 1" atau "Ceklis 2".
+            * (Contoh Gagal: "REKOMENDASI: TUNGGU. Gagal Cek 2: Harga di 'no-man's-land'. Tunggu pullback ke support 5-menit.").
+            * (Contoh Lolos: "Peluang SHORT: Tren 1 Jam Bearish, harga tertahan di resistance 5-menit, dan RSI Overbought.").
             * JANGAN sebutkan 'Opsi Terbaik' di dalam reasoning.
       `;
-      // --- AKHIR PROMPT BARU ---
+      // --- AKHIR PERUBAHAN PROMPT ---
 
       console.log(`[getAnalysis] Cache TIDAK VALID. Meminta AI untuk 'bestOption' (Umum) dan 'currentPricePlan' (Mode Scalping 3-Langkah)...`);
       const fullResult = await callGemini(promptFull, fullAnalysisSchema) as Omit<AnalysisResult, 'isCachedData' | 'currentPricePlan'> & { currentPricePlan?: TradePlan };

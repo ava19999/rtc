@@ -75,7 +75,12 @@ const HomePage: React.FC<HomePageProps> = ({
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const fetchDominanceData = useCallback(async () => {
-    setIsDominanceLoading(true);
+    // --- PERBAIKAN: Set loading HANYA jika tidak ada cache ---
+    // (Kita asumsikan cache-on-load untuk dominance belum ada, jadi kita set loading)
+    if (!marketDominance) {
+      setIsDominanceLoading(true);
+    }
+    // --- AKHIR PERBAIKAN ---
     try {
         const dominance = await fetchMarketDominance();
         setMarketDominance(dominance);
@@ -84,7 +89,7 @@ const HomePage: React.FC<HomePageProps> = ({
     } finally {
         setIsDominanceLoading(false);
     }
-  }, []);
+  }, [marketDominance]); // Tambahkan marketDominance sebagai dependensi
 
   // --- PERBAIKAN DI SINI ---
   useEffect(() => { 
@@ -149,33 +154,11 @@ const HomePage: React.FC<HomePageProps> = ({
   
   // --- PERBAIKAN LOGIKA RENDER DI SINI ---
   const renderContent = () => {
-    // Tampilkan skeleton HANYA jika:
-    // 1. isTrendingLoading (untuk Peluang Pasar) MASIH true
-    // 2. ATAU heroCoin (untuk Hero Koin) MASIH null DAN KITA TIDAK sedang melihat koin hasil pencarian
-    const showSkeleton = isTrendingLoading || (heroCoin === null && !onSelectCoin);
-    
-    if (showSkeleton && !trendingError) {
-      return (
-        <>
-          {/* Logika baru: Tampilkan SkeletonHero HANYA jika heroCoin (BTC) belum ada.
-            Jika heroCoin sudah ada tapi 'Peluang Pasar' masih loading, 
-            HeroCoin akan tampil sementara 'Peluang Pasar' tetap skeleton.
-          */}
-          {!heroCoin ? <SkeletonHero /> : (
-             <HeroCoin crypto={heroCoin} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />
-          )}
-          
-          {/* Tampilkan SkeletonCard HANYA jika isTrendingLoading (Peluang Pasar) masih true */}
-          {isTrendingLoading && (
-            <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar mt-4">
-              {Array.from({ length: 4 }).map((_, index) => <SkeletonCard key={index} />)}
-            </div>
-          )}
-        </>
-      );
-    }
-
-    if (trendingError) {
+    // Tampilkan error HANYA jika:
+    // 1. Ada error, DAN
+    // 2. Kita tidak punya cache sama sekali (heroCoin & otherTrendingCoins kosong)
+    // 3. DAN kita tidak sedang melihat hasil pencarian
+    if (trendingError && !heroCoin && otherTrendingCoins.length === 0 && !searchedCoin) {
       return (
         <div className="flex flex-col items-center justify-center h-48 text-center">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-magenta mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -186,17 +169,51 @@ const HomePage: React.FC<HomePageProps> = ({
       );
     }
 
+    // Tampilkan skeleton HANYA jika KEDUA data (Hero dan Trending) tidak ada (bukan dari cache)
+    // DAN kita tidak sedang melihat hasil pencarian
+    if (isTrendingLoading && !heroCoin && otherTrendingCoins.length === 0 && !searchedCoin) {
+      return (
+        <>
+          <SkeletonHero />
+          <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar mt-4">
+            {Array.from({ length: 4 }).map((_, index) => <SkeletonCard key={index} />)}
+          </div>
+        </>
+      );
+    }
+
+    // Jika salah satu atau kedua data sudah ada (dari cache atau fetch)
     return (
       <div className="animate-fade-in-content">
-        {heroCoin && <HeroCoin crypto={heroCoin} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />}
-        {otherTrendingCoins.length > 0 && (
+        {/* Tampilkan HeroCoin (dari cache atau fetch)
+          ATAU skeleton-nya jika masih ditunggu (heroCoin === null)
+          DAN kita tidak sedang melihat hasil pencarian (karena hasil pencarian akan jadi heroCoin)
+        */}
+        {heroCoin ? (
+          <HeroCoin crypto={heroCoin} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />
+        ) : !searchedCoin ? ( 
+          // Hanya tampilkan skeleton hero jika BTC belum ada & kita tidak sedang mencari
+          <SkeletonHero />
+        ) : null}
+        
+        {/* Tampilkan Peluang Pasar (dari cache atau fetch)
+          ATAU skeleton-nya jika masih ditunggu DAN cache-nya kosong
+        */}
+        {isTrendingLoading && otherTrendingCoins.length === 0 ? (
+           <div className="mt-4">
+             <h3 className="text-base font-bold text-gray-300 mb-2">Peluang Pasar Lainnya</h3>
+             <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar">
+                {Array.from({ length: 4 }).map((_, index) => <SkeletonCard key={index} />)}
+             </div>
+           </div>
+        ) : otherTrendingCoins.length > 0 ? (
           <div className="mt-4">
              <h3 className="text-base font-bold text-gray-300 mb-2">Peluang Pasar Lainnya</h3>
              <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar">
                 {otherTrendingCoins.map(crypto => <CryptoCard key={crypto.id} crypto={crypto} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />)}
              </div>
           </div>
-        )}
+        ) : null}
       </div>
     );
   }
@@ -212,7 +229,7 @@ const HomePage: React.FC<HomePageProps> = ({
                 </div>
                  <div className="relative w-full sm:max-w-xs" ref={searchContainerRef}>
                     <input type="text" placeholder="Cari 500 koin teratas..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 pl-9 pr-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-electric transition-all text-sm" />
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     {(searchQuery.length > 0) && (
                         <ul className="absolute top-full mt-1.5 w-full bg-gray-900/80 backdrop-blur-md border border-white/10 rounded-lg shadow-lg max-h-64 overflow-y-auto z-30">
                           {isCoinListLoading ? (

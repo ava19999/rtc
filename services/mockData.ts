@@ -1,3 +1,4 @@
+// services/mockData.ts
 import { COINGECKO_API_BASE_URL, NEWS_API_URL, MAJOR_EXCHANGES } from '../constants';
 // Fix: Imported CACHE_DURATION to resolve reference errors.
 import { apiRequest, CACHE_DURATION } from './apiService';
@@ -40,7 +41,17 @@ export const fetchTrendingCoins = async (): Promise<CryptoData[]> => {
     // --- AKHIR PERUBAHAN ---
     
     const coinsData = await apiRequest(coinsUrl, CACHE_DURATION.DEFAULT);
-    return coinsData.map(mapCoinGeckoToCryptoData);
+    const result = coinsData.map(mapCoinGeckoToCryptoData);
+
+    // --- PERBAIKAN: Simpan ke localStorage ---
+    try {
+      localStorage.setItem('cachedTrending', JSON.stringify(result));
+    } catch (e) {
+      console.warn('Gagal menyimpan cache trending:', e);
+    }
+    // --- AKHIR PERBAIKAN ---
+
+    return result;
 };
 
 export const fetchMarketDominance = async (): Promise<MarketDominance> => {
@@ -74,7 +85,20 @@ export const fetchCoinDetails = async (coinId: string): Promise<CryptoData> => {
     const url = `${COINGECKO_API_BASE_URL}/coins/markets?vs_currency=usd&ids=${coinId}&sparkline=true`;
     const coinsData = await apiRequest(url, CACHE_DURATION.DEFAULT);
     if (!coinsData || coinsData.length === 0) throw new Error("Koin tidak ditemukan");
-    return mapCoinGeckoToCryptoData(coinsData[0]);
+    
+    const result = mapCoinGeckoToCryptoData(coinsData[0]);
+
+    // --- PERBAIKAN: Simpan BTC ke localStorage ---
+    if (coinId === 'bitcoin') {
+      try {
+        localStorage.setItem('cachedBtc', JSON.stringify(result));
+      } catch (e) {
+        console.warn('Gagal menyimpan cache BTC:', e);
+      }
+    }
+    // --- AKHIR PERBAIKAN ---
+
+    return result;
 };
 
 export const fetchExchangeTickers = async (coinId: string): Promise<ExchangeTicker[]> => {

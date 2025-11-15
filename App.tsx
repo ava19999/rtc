@@ -153,12 +153,36 @@ const AppContent: React.FC = () => {
   const [fullCoinList, setFullCoinList] = useState<CoinListItem[]>([]);
   const [isCoinListLoading, setIsCoinListLoading] = useState(true);
   const [coinListError, setCoinListError] = useState<string | null>(null);
-  const [trendingCoins, setTrendingCoins] = useState<CryptoData[]>([]);
-  const [isTrendingLoading, setIsTrendingLoading] = useState(true);
   const [trendingError, setTrendingError] = useState<string | null>(null);
   const [searchedCoin, setSearchedCoin] = useState<CryptoData | null>(null);
 
-  const [btcFetchedCoin, setBtcFetchedCoin] = useState<CryptoData | null>(null);
+  // --- PERBAIKAN: Gunakan localStorage untuk cache awal ---
+  // Ini akan memuat data lama (jika ada) secara instan saat aplikasi dibuka
+  const [btcFetchedCoin, setBtcFetchedCoin] = useState<CryptoData | null>(() => {
+    try {
+      const data = localStorage.getItem('cachedBtc');
+      return data ? JSON.parse(data) : null;
+    } catch (e) {
+      console.warn('Gagal memuat cache BTC:', e);
+      return null;
+    }
+  });
+  
+  const [trendingCoins, setTrendingCoins] = useState<CryptoData[]>(() => {
+    try {
+      const data = localStorage.getItem('cachedTrending');
+      // Jika ada data cache, kita tidak perlu menampilkan skeleton loading awal
+      if (data) {
+        setIsTrendingLoading(false); // <--- MATIKAN SKELETON JIKA ADA CACHE
+        return JSON.parse(data);
+      }
+      return [];
+    } catch (e) {
+      console.warn('Gagal memuat cache Trending:', e);
+      return [];
+    }
+  });
+  // --- AKHIR PERBAIKAN ---
   
   const [rooms, setRooms] = useState<Room[]>([
     { id: 'berita-kripto', name: 'Berita Kripto', userCount: 0, isDefaultRoom: true },
@@ -299,15 +323,31 @@ const AppContent: React.FC = () => {
     }
   }, [currentRoom]);
 
+  // --- PERBAIKAN: useCallback untuk fetchTrendingData ---
   const fetchTrendingData = useCallback(async (showSkeleton = true) => {
-    if (showSkeleton) { setIsTrendingLoading(true); setTrendingError(null); }
-    try { setTrendingCoins(await fetchTrendingCoins()); }
+    // Jika tidak ada cache, tunjukkan skeleton. Jika ada cache, jangan tunjukkan (tetap false).
+    const hasCache = trendingCoins.length > 0;
+    if (showSkeleton && !hasCache) { 
+      setIsTrendingLoading(true); 
+    }
+    setTrendingError(null);
+    
+    try { 
+      const data = await fetchTrendingCoins();
+      setTrendingCoins(data); 
+    }
     catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Gagal memuat data tren.';
-      if (showSkeleton) setTrendingError(errorMessage);
-      else console.error('Gagal menyegarkan data tren:', errorMessage);
-    } finally { if (showSkeleton) setIsTrendingLoading(false); }
-  }, []);
+      // Hanya tampilkan error jika kita tidak punya cache sama sekali
+      if (!hasCache) {
+        setTrendingError(errorMessage);
+      } else {
+        console.error('Gagal menyegarkan data tren (cache ditampilkan):', errorMessage);
+      }
+    } finally { 
+      setIsTrendingLoading(false); // Selalu matikan loading setelah selesai
+    }
+  }, [trendingCoins.length]); // dependensi pada 'length' agar tahu status cache
   
   const fetchBtc = useCallback(async () => {
     try {
@@ -316,24 +356,38 @@ const AppContent: React.FC = () => {
     } catch (err) {
       console.error("Gagal memuat data Bitcoin:", err);
       // Jika fetchBtc gagal, kita tidak ingin 'trendingError' terpicu
-      // 'isTrendingLoading' akan ditangani oleh fetchTrendingData
+      // Biarkan cache (jika ada) yang ditampilkan
     }
   }, []); 
 
   const getRate = useCallback(async () => {
-    setIsRateLoading(true);
+    // Jangan set loading true jika sudah ada data (untuk refresh latar belakang)
+    if (!idrRate) {
+      setIsRateLoading(true);
+    }
     try { setIdrRate(await fetchIdrRate()); }
-    catch (error) { console.error('Gagal ambil kurs IDR:', error); setIdrRate(16000); }
+    catch (error) { 
+      console.error('Gagal ambil kurs IDR:', error); 
+      if (!idrRate) setIdrRate(16000); // Set fallback HANYA jika belum ada
+    }
     finally { setIsRateLoading(false); }
-  }, []); 
+  }, [idrRate]); // Tambahkan idrRate sebagai dependensi
 
   const fetchList = useCallback(async () => {
-    setIsCoinListLoading(true);
+    // Jangan set loading true jika sudah ada data (untuk refresh latar belakang)
+    if (fullCoinList.length === 0) {
+      setIsCoinListLoading(true);
+    }
     setCoinListError(null);
     try { setFullCoinList(await fetchTop500Coins()); }
-    catch (err) { setCoinListError('Gagal ambil daftar koin.'); }
+    catch (err) { 
+      if (fullCoinList.length === 0) {
+        setCoinListError('Gagal ambil daftar koin.'); 
+      }
+    }
     finally { setIsCoinListLoading(false); }
-  }, []); 
+  }, [fullCoinList.length]); // dependensi pada 'length'
+  // --- AKHIR PERBAIKAN useCallback ---
 
   const handleResetToTrending = useCallback(() => {
     setSearchedCoin(null);
@@ -1039,32 +1093,34 @@ const AppContent: React.FC = () => {
   // --- PERBAIKAN DI SINI: Efek untuk memuat data API secara bertahap (WebView-Optimized) ---
   useEffect(() => {
     // --- P1 (Kritis - 0 md) ---
-    // Memuat data fallback untuk Hero Koin (BTC) terlebih dahulu.
+    // Sesuai permintaan: Muat BTC (Hero Koin) dulu.
+    // Ini akan memuat dari cache jika ada, lalu memanggil API.
     console.log("[API Stagger] P1: Memanggil fetchBtc() (Hero Koin)...");
     fetchBtc();
 
-    // --- P2 (Penting - 500 md) ---
-    // Memuat data utama untuk HomePage: List Peluang Pasar & Hot Coin di header.
-    // Skeleton (isTrendingLoading) akan aktif.
+    // --- P2 (Penting - 1000 md) ---
+    // Sesuai permintaan: Muat Peluang Pasar setelah Dominance (P3).
+    // Kita tempatkan P3 (Dominance) di HomePage.tsx dengan jeda 500ms.
+    // Jadi P2 ini (Peluang Pasar) kita jalankan setelahnya.
     const timerP2_Trending = setTimeout(() => {
-      console.log("[API Stagger] P2: Memanggil fetchTrendingData() (Peluang Pasar)...");
-      fetchTrendingData(true); // Menampilkan skeleton
-    }, 500); // Tunda 500ms
+      console.log("[API Stagger] P3: Memanggil fetchTrendingData() (Peluang Pasar)...");
+      // Parameter 'false' berarti JANGAN tampilkan skeleton jika sudah ada cache
+      fetchTrendingData(false); 
+    }, 1000); // Tunda 1 detik
 
     // --- P3 (Sekunder - 1500 md) ---
     // Memuat kurs IDR (untuk menampilkan harga P1 & P2).
     const timerP3_Rate = setTimeout(() => {
-      console.log("[API Stagger] P3: Memanggil getRate()...");
+      console.log("[API Stagger] P4: Memanggil getRate()...");
       getRate();
-    }, 1500); // Tunda 1.5 detik (setelah P2 selesai)
+    }, 1500); // Tunda 1.5 detik
 
-    // --- P4 (Latar Belakang - 2200 md) ---
+    // --- P4 (Latar Belakang - 2000 md) ---
     // Memuat data terberat (500 koin) untuk fitur pencarian.
-    // Dijalankan paling akhir karena tidak langsung terlihat.
     const timerP4_List = setTimeout(() => {
-      console.log("[API Stagger] P4: Memanggil fetchList()...");
+      console.log("[API Stagger] P5: Memanggil fetchList()...");
       fetchList();
-    }, 2200); // Tunda 2.2 detik
+    }, 2000); // Tunda 2 detik
 
     // --- Interval Refresh ---
     // Ini tetap berjalan seperti biasa untuk me-refresh data tren setiap 4 menit.
@@ -1336,9 +1392,9 @@ const AppContent: React.FC = () => {
     switch (activePage) {
       case 'home':
         // --- PERBAIKAN LOGIKA LOADING DI SINI ---
-        // Kita hanya teruskan `isTrendingLoading` yang sesungguhnya.
-        // Komponen HomePage akan tahu cara menampilkan skeleton
-        // untuk Hero (jika heroCoin=null) dan Peluang (jika isTrendingLoading=true)
+        // 'isTrendingLoading' sekarang dikontrol oleh fetchTrendingData
+        // Jika ada cache, loading=false. Jika tidak ada cache, loading=true.
+        // Ini akan membuat skeleton hanya muncul saat *benar-benar* tidak ada data.
         return <HomePage 
                   idrRate={idrRate} 
                   isRateLoading={isRateLoading} 

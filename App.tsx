@@ -135,6 +135,30 @@ const updateNativeSoundState = (enabled: boolean) => {
   }
 };
 
+// --- PERBAIKAN: Fungsi helper untuk membaca cache DILUAR AppContent ---
+// Ini untuk memastikan `useMemo` tidak salah
+const getCachedTrending = (): CryptoData[] => {
+  try {
+    const data = localStorage.getItem('cachedTrending');
+    return data ? JSON.parse(data) : [];
+  } catch (e) {
+    console.warn('Gagal memuat cache Trending:', e);
+    return [];
+  }
+};
+
+const getCachedBtc = (): CryptoData | null => {
+  try {
+    const data = localStorage.getItem('cachedBtc');
+    return data ? JSON.parse(data) : null;
+  } catch (e) {
+    console.warn('Gagal memuat cache BTC:', e);
+    return null;
+  }
+};
+// --- AKHIR PERBAIKAN ---
+
+
 const AppContent: React.FC = () => {
   // --- STATE DEFINITIONS ---
   const [pageHistory, setPageHistory] = useState<Page[]>(['home']);
@@ -156,32 +180,18 @@ const AppContent: React.FC = () => {
   const [trendingError, setTrendingError] = useState<string | null>(null);
   const [searchedCoin, setSearchedCoin] = useState<CryptoData | null>(null);
 
-  // --- PERBAIKAN: Gunakan localStorage untuk cache awal ---
-  // Ini akan memuat data lama (jika ada) secara instan saat aplikasi dibuka
-  const [btcFetchedCoin, setBtcFetchedCoin] = useState<CryptoData | null>(() => {
-    try {
-      const data = localStorage.getItem('cachedBtc');
-      return data ? JSON.parse(data) : null;
-    } catch (e) {
-      console.warn('Gagal memuat cache BTC:', e);
-      return null;
-    }
-  });
+  // --- PERBAIKAN: Inisialisasi state dari cache (Cara yang Benar) ---
+  // 1. Gunakan useMemo untuk membaca cache HANYA SEKALI.
+  const initialBtcData = useMemo(() => getCachedBtc(), []);
+  const initialTrendingData = useMemo(() => getCachedTrending(), []);
+
+  // 2. Inisialisasi state DENGAN data cache tersebut.
+  const [btcFetchedCoin, setBtcFetchedCoin] = useState<CryptoData | null>(initialBtcData);
+  const [trendingCoins, setTrendingCoins] = useState<CryptoData[]>(initialTrendingData);
   
-  const [trendingCoins, setTrendingCoins] = useState<CryptoData[]>(() => {
-    try {
-      const data = localStorage.getItem('cachedTrending');
-      // Jika ada data cache, kita tidak perlu menampilkan skeleton loading awal
-      if (data) {
-        setIsTrendingLoading(false); // <--- MATIKAN SKELETON JIKA ADA CACHE
-        return JSON.parse(data);
-      }
-      return [];
-    } catch (e) {
-      console.warn('Gagal memuat cache Trending:', e);
-      return [];
-    }
-  });
+  // 3. Atur state loading berdasarkan apakah cache ada isinya atau tidak.
+  //    Jika cache KOSONG (panjangnya 0), maka kita set loading ke true.
+  const [isTrendingLoading, setIsTrendingLoading] = useState(initialTrendingData.length === 0);
   // --- AKHIR PERBAIKAN ---
   
   const [rooms, setRooms] = useState<Room[]>([
@@ -325,21 +335,18 @@ const AppContent: React.FC = () => {
 
   // --- PERBAIKAN: useCallback untuk fetchTrendingData ---
   const fetchTrendingData = useCallback(async (showSkeleton = true) => {
-    // Jika tidak ada cache, tunjukkan skeleton. Jika ada cache, jangan tunjukkan (tetap false).
-    const hasCache = trendingCoins.length > 0;
-    if (showSkeleton && !hasCache) { 
-      setIsTrendingLoading(true); 
-    }
+    // 'showSkeleton' sekarang diabaikan karena state loading diatur oleh cache
+    // Kita hanya set error ke null
     setTrendingError(null);
     
     try { 
       const data = await fetchTrendingCoins();
-      setTrendingCoins(data); 
+      setTrendingCoins(data); // Perbarui state dengan data baru
     }
     catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Gagal memuat data tren.';
       // Hanya tampilkan error jika kita tidak punya cache sama sekali
-      if (!hasCache) {
+      if (initialTrendingData.length === 0) {
         setTrendingError(errorMessage);
       } else {
         console.error('Gagal menyegarkan data tren (cache ditampilkan):', errorMessage);
@@ -347,16 +354,14 @@ const AppContent: React.FC = () => {
     } finally { 
       setIsTrendingLoading(false); // Selalu matikan loading setelah selesai
     }
-  }, [trendingCoins.length]); // dependensi pada 'length' agar tahu status cache
+  }, [initialTrendingData.length]); // dependensi pada cache awal
   
   const fetchBtc = useCallback(async () => {
     try {
       const btcData = await fetchCoinDetails('bitcoin');
-      setBtcFetchedCoin(btcData);
+      setBtcFetchedCoin(btcData); // Perbarui state dengan data baru
     } catch (err) {
-      console.error("Gagal memuat data Bitcoin:", err);
-      // Jika fetchBtc gagal, kita tidak ingin 'trendingError' terpicu
-      // Biarkan cache (jika ada) yang ditampilkan
+      console.error("Gagal menyegarkan data Bitcoin (cache ditampilkan):", err);
     }
   }, []); 
 
@@ -388,6 +393,7 @@ const AppContent: React.FC = () => {
     finally { setIsCoinListLoading(false); }
   }, [fullCoinList.length]); // dependensi pada 'length'
   // --- AKHIR PERBAIKAN useCallback ---
+
 
   const handleResetToTrending = useCallback(() => {
     setSearchedCoin(null);
@@ -1126,6 +1132,7 @@ const AppContent: React.FC = () => {
     // Ini tetap berjalan seperti biasa untuk me-refresh data tren setiap 4 menit.
     const REFRESH_INTERVAL = 4 * 60 * 1000; // 4 menit
     const intervalId = setInterval(() => {
+      // HANYA refresh trending. BTC, Rate, dan List tidak perlu di-refresh sesering ini
       console.log("Memperbarui daftar trending (4 menit)...");
       fetchTrendingData(false); // Refresh tanpa skeleton
     }, REFRESH_INTERVAL);
@@ -1392,8 +1399,7 @@ const AppContent: React.FC = () => {
     switch (activePage) {
       case 'home':
         // --- PERBAIKAN LOGIKA LOADING DI SINI ---
-        // 'isTrendingLoading' sekarang dikontrol oleh fetchTrendingData
-        // Jika ada cache, loading=false. Jika tidak ada cache, loading=true.
+        // 'isTrendingLoading' sekarang dikontrol oleh cache.
         // Ini akan membuat skeleton hanya muncul saat *benar-benar* tidak ada data.
         return <HomePage 
                   idrRate={idrRate} 

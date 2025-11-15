@@ -88,11 +88,11 @@ const HomePage: React.FC<HomePageProps> = ({
 
   // --- PERBAIKAN DI SINI ---
   useEffect(() => { 
-    // Beri jeda 700ms agar berjalan bersamaan dengan P2 (getRate) dari App.tsx
+    // Beri jeda 1000ms agar berjalan bersamaan dengan P3 (getRate) dari App.tsx
     const timer = setTimeout(() => {
-      console.log("[API Stagger] P2: Memanggil fetchDominanceData...");
+      console.log("[API Stagger] P3: Memanggil fetchDominanceData()...");
       fetchDominanceData();
-    }, 700); // Tunda 700ms
+    }, 1000); // Tunda 1 detik
     
     // Bersihkan timer
     return () => clearTimeout(timer);
@@ -135,7 +135,7 @@ const HomePage: React.FC<HomePageProps> = ({
     // Sekarang kita juga mengirimkan crypto.id
     fetchCryptoAnalysis(crypto.name, crypto.price, crypto.id)
       .then(setAnalysisResult)
-    // --- AKHIR PERBAIKAN ---
+    // --- AKHIR PERUBAHAN ---
       .catch(err => setAnalysisError(err.message))
       .finally(() => setIsAnalysisLoading(false));
     

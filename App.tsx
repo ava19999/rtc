@@ -308,8 +308,7 @@ const AppContent: React.FC = () => {
       else console.error('Gagal menyegarkan data tren:', errorMessage);
     } finally { if (showSkeleton) setIsTrendingLoading(false); }
   }, []);
-  
-  // --- PERBAIKAN: Fungsi-fungsi ini sekarang menjadi useCallback ---
+
   const fetchBtc = useCallback(async () => {
     try {
       const btcData = await fetchCoinDetails('bitcoin');
@@ -317,14 +316,14 @@ const AppContent: React.FC = () => {
     } catch (err) {
       console.error("Gagal memuat data Bitcoin:", err);
     }
-  }, []); // Dependensi kosong, hanya perlu didefinisikan sekali
+  }, []); 
 
   const getRate = useCallback(async () => {
     setIsRateLoading(true);
     try { setIdrRate(await fetchIdrRate()); }
     catch (error) { console.error('Gagal ambil kurs IDR:', error); setIdrRate(16000); }
     finally { setIsRateLoading(false); }
-  }, []); // Dependensi kosong
+  }, []); 
 
   const fetchList = useCallback(async () => {
     setIsCoinListLoading(true);
@@ -332,8 +331,7 @@ const AppContent: React.FC = () => {
     try { setFullCoinList(await fetchTop500Coins()); }
     catch (err) { setCoinListError('Gagal ambil daftar koin.'); }
     finally { setIsCoinListLoading(false); }
-  }, []); // Dependensi kosong
-  // --- AKHIR PERBAIKAN FUNGSI ---
+  }, []); 
 
   const handleResetToTrending = useCallback(() => {
     setSearchedCoin(null);
@@ -1036,52 +1034,56 @@ const AppContent: React.FC = () => {
     return () => unsubscribe();
   }, [database, currentRoom, handleLogout]); // handleLogout ditambahkan sebagai dependency
 
-  // --- PERBAIKAN DI SINI: Atur timer 4 menit ---
-  // Efek untuk mengambil data (API calls, dll)
+  // --- PERBAIKAN DI SINI: Efek untuk memuat data API secara bertahap (WebView-Optimized) ---
   useEffect(() => {
-    // --- P1 (Prioritas 1: 0 md) ---
-    // Ini mengambil "Peluang Pasar Lainnya" (trendingCoins) dan "Hero Koin (BTC)" (btcFetchedCoin)
-    // Sesuai permintaan Anda, ini dipanggil paling pertama.
-    console.log("[API Stagger] P1: Memanggil fetchTrendingData dan fetchBtc...");
-    fetchTrendingData(true); // Menampilkan skeleton
+    // --- P1 (Kritis - 0 md) ---
+    // Memuat data fallback untuk Hero Koin (BTC) terlebih dahulu.
+    console.log("[API Stagger] P1: Memanggil fetchBtc() (Hero Koin)...");
     fetchBtc();
 
-    // --- P2 (Prioritas 2: 700 md) ---
-    // Ini mengambil kurs IDR (penting untuk P1)
-    const timerP2_Rate = setTimeout(() => {
-      console.log("[API Stagger] P2: Memanggil getRate...");
+    // --- P2 (Penting - 500 md) ---
+    // Memuat data utama untuk HomePage: List Peluang Pasar & Hot Coin di header.
+    // Skeleton (isTrendingLoading) akan aktif.
+    const timerP2_Trending = setTimeout(() => {
+      console.log("[API Stagger] P2: Memanggil fetchTrendingData() (Peluang Pasar)...");
+      fetchTrendingData(true); // Menampilkan skeleton
+    }, 500); // Tunda 500ms
+
+    // --- P3 (Sekunder - 1000 md) ---
+    // Memuat kurs IDR (untuk menampilkan harga P1 & P2).
+    const timerP3_Rate = setTimeout(() => {
+      console.log("[API Stagger] P3: Memanggil getRate()...");
       getRate();
-    }, 700); // Tunda 700ms
+    }, 1000); // Tunda 1 detik
 
-    // --- P3 (Prioritas 3: 1500 md) ---
-    // Ini adalah panggilan terberat (2 API) untuk data pencarian 500 koin.
-    // Kita tunda paling lama karena tidak langsung dilihat pengguna.
-    const timerP3_List = setTimeout(() => {
-      console.log("[API Stagger] P3: Memanggil fetchList (500 koin)...");
+    // --- P4 (Latar Belakang - 1700 md) ---
+    // Memuat data terberat (500 koin) untuk fitur pencarian.
+    // Dijalankan paling akhir karena tidak langsung terlihat.
+    const timerP4_List = setTimeout(() => {
+      console.log("[API Stagger] P4: Memanggil fetchList()...");
       fetchList();
-    }, 1500); // Tunda 1.5 detik
+    }, 1700); // Tunda 1.7 detik
 
-    // --- Interval Refresh (Biarkan seperti semula) ---
+    // --- Interval Refresh ---
+    // Ini tetap berjalan seperti biasa untuk me-refresh data tren setiap 4 menit.
     const REFRESH_INTERVAL = 4 * 60 * 1000; // 4 menit
     const intervalId = setInterval(() => {
       console.log("Memperbarui daftar trending (4 menit)...");
       fetchTrendingData(false); // Refresh tanpa skeleton
     }, REFRESH_INTERVAL);
 
-    // --- Cleanup ---
-    // Pastikan semua timer dibersihkan saat komponen unmount
+    // --- Cleanup Timers ---
     return () => {
-      clearTimeout(timerP2_Rate);
-      clearTimeout(timerP3_List);
+      clearTimeout(timerP2_Trending);
+      clearTimeout(timerP3_Rate);
+      clearTimeout(timerP4_List);
       clearInterval(intervalId);
     };
     
-  }, [fetchTrendingData, fetchBtc, getRate, fetchList]); // Tambahkan semua dependensi
+  }, [fetchTrendingData, fetchBtc, getRate, fetchList]); // Dependensi adalah fungsi useCallback
   // --- AKHIR PERBAIKAN ---
 
-  // TIGA BLOK useEffect DI BAWAH INI TELAH DIHAPUS
-  // DAN DIGABUNGKAN KE DALAM BLOK useEffect DI ATAS
-
+  // Efek untuk memuat berita (Tidak perlu diubah)
   useEffect(() => {
     const savedNews = localStorage.getItem('cryptoNews');
     const lastFetch = localStorage.getItem('lastNewsFetch');

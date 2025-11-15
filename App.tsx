@@ -308,13 +308,15 @@ const AppContent: React.FC = () => {
       else console.error('Gagal menyegarkan data tren:', errorMessage);
     } finally { if (showSkeleton) setIsTrendingLoading(false); }
   }, []);
-
+  
   const fetchBtc = useCallback(async () => {
     try {
       const btcData = await fetchCoinDetails('bitcoin');
       setBtcFetchedCoin(btcData);
     } catch (err) {
       console.error("Gagal memuat data Bitcoin:", err);
+      // Jika fetchBtc gagal, kita tidak ingin 'trendingError' terpicu
+      // 'isTrendingLoading' akan ditangani oleh fetchTrendingData
     }
   }, []); 
 
@@ -1049,20 +1051,20 @@ const AppContent: React.FC = () => {
       fetchTrendingData(true); // Menampilkan skeleton
     }, 500); // Tunda 500ms
 
-    // --- P3 (Sekunder - 1000 md) ---
+    // --- P3 (Sekunder - 1500 md) ---
     // Memuat kurs IDR (untuk menampilkan harga P1 & P2).
     const timerP3_Rate = setTimeout(() => {
       console.log("[API Stagger] P3: Memanggil getRate()...");
       getRate();
-    }, 1000); // Tunda 1 detik
+    }, 1500); // Tunda 1.5 detik (setelah P2 selesai)
 
-    // --- P4 (Latar Belakang - 1700 md) ---
+    // --- P4 (Latar Belakang - 2200 md) ---
     // Memuat data terberat (500 koin) untuk fitur pencarian.
     // Dijalankan paling akhir karena tidak langsung terlihat.
     const timerP4_List = setTimeout(() => {
       console.log("[API Stagger] P4: Memanggil fetchList()...");
       fetchList();
-    }, 1700); // Tunda 1.7 detik
+    }, 2200); // Tunda 2.2 detik
 
     // --- Interval Refresh ---
     // Ini tetap berjalan seperti biasa untuk me-refresh data tren setiap 4 menit.
@@ -1333,6 +1335,10 @@ const AppContent: React.FC = () => {
   const renderActivePage = () => {
     switch (activePage) {
       case 'home':
+        // --- PERBAIKAN LOGIKA LOADING DI SINI ---
+        // Kita hanya teruskan `isTrendingLoading` yang sesungguhnya.
+        // Komponen HomePage akan tahu cara menampilkan skeleton
+        // untuk Hero (jika heroCoin=null) dan Peluang (jika isTrendingLoading=true)
         return <HomePage 
                   idrRate={idrRate} 
                   isRateLoading={isRateLoading} 
@@ -1343,11 +1349,12 @@ const AppContent: React.FC = () => {
                   coinListError={coinListError} 
                   heroCoin={heroCoin}
                   otherTrendingCoins={otherTrendingCoins}
-                  isTrendingLoading={isTrendingLoading || (heroCoin === null && !searchedCoin)}
+                  isTrendingLoading={isTrendingLoading} 
                   trendingError={trendingError} 
                   onSelectCoin={handleSelectCoin} 
                   onReloadTrending={handleReloadPage} 
                 />;
+        // --- AKHIR PERBAIKAN LOGIKA LOADING ---
       case 'rooms':
         return <RoomsListPage 
           rooms={updatedRooms} onJoinRoom={handleJoinRoom} onCreateRoom={handleCreateRoom} totalUsers={totalUsers} hotCoin={hotCoinForHeader} userProfile={currentUser} currentRoomId={currentRoom?.id || null} joinedRoomIds={joinedRoomIds} onLeaveJoinedRoom={handleLeaveJoinedRoom} unreadCounts={unreadCounts} onDeleteRoom={handleDeleteRoom} onToggleNotification={handleToggleNotification} notificationSettings={notificationSettings} />;

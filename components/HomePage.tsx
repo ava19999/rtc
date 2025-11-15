@@ -88,11 +88,11 @@ const HomePage: React.FC<HomePageProps> = ({
 
   // --- PERBAIKAN DI SINI ---
   useEffect(() => { 
-    // Beri jeda 1000ms agar berjalan bersamaan dengan P3 (getRate) dari App.tsx
+    // Beri jeda 500ms agar berjalan di P2 (setelah P1/fetchBtc)
     const timer = setTimeout(() => {
-      console.log("[API Stagger] P3: Memanggil fetchDominanceData()...");
+      console.log("[API Stagger] P2: Memanggil fetchDominanceData()...");
       fetchDominanceData();
-    }, 1000); // Tunda 1 detik
+    }, 500); // Tunda 500ms
     
     // Bersihkan timer
     return () => clearTimeout(timer);
@@ -147,17 +147,34 @@ const HomePage: React.FC<HomePageProps> = ({
 
   const closeModal = () => { setIsModalOpen(false); setSelectedCrypto(null); };
   
+  // --- PERBAIKAN LOGIKA RENDER DI SINI ---
   const renderContent = () => {
-    if (isTrendingLoading) {
+    // Tampilkan skeleton HANYA jika:
+    // 1. isTrendingLoading (untuk Peluang Pasar) MASIH true
+    // 2. ATAU heroCoin (untuk Hero Koin) MASIH null DAN KITA TIDAK sedang melihat koin hasil pencarian
+    const showSkeleton = isTrendingLoading || (heroCoin === null && !onSelectCoin);
+    
+    if (showSkeleton && !trendingError) {
       return (
         <>
-          <SkeletonHero />
-          <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar mt-4">
-            {Array.from({ length: 4 }).map((_, index) => <SkeletonCard key={index} />)}
-          </div>
+          {/* Logika baru: Tampilkan SkeletonHero HANYA jika heroCoin (BTC) belum ada.
+            Jika heroCoin sudah ada tapi 'Peluang Pasar' masih loading, 
+            HeroCoin akan tampil sementara 'Peluang Pasar' tetap skeleton.
+          */}
+          {!heroCoin ? <SkeletonHero /> : (
+             <HeroCoin crypto={heroCoin} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />
+          )}
+          
+          {/* Tampilkan SkeletonCard HANYA jika isTrendingLoading (Peluang Pasar) masih true */}
+          {isTrendingLoading && (
+            <div className="flex space-x-3 overflow-x-auto pb-3 -mx-3 px-3 custom-scrollbar mt-4">
+              {Array.from({ length: 4 }).map((_, index) => <SkeletonCard key={index} />)}
+            </div>
+          )}
         </>
       );
     }
+
     if (trendingError) {
       return (
         <div className="flex flex-col items-center justify-center h-48 text-center">
@@ -168,6 +185,7 @@ const HomePage: React.FC<HomePageProps> = ({
         </div>
       );
     }
+
     return (
       <div className="animate-fade-in-content">
         {heroCoin && <HeroCoin crypto={heroCoin} onAnalyze={handleAnalyze} idrRate={idrRate} currency={currency} />}
@@ -182,6 +200,7 @@ const HomePage: React.FC<HomePageProps> = ({
       </div>
     );
   }
+  // --- AKHIR PERBAIKAN LOGIKA RENDER ---
 
   return (
     <div className="animate-fade-in">
@@ -193,7 +212,7 @@ const HomePage: React.FC<HomePageProps> = ({
                 </div>
                  <div className="relative w-full sm:max-w-xs" ref={searchContainerRef}>
                     <input type="text" placeholder="Cari 500 koin teratas..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 pl-9 pr-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-electric transition-all text-sm" />
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     {(searchQuery.length > 0) && (
                         <ul className="absolute top-full mt-1.5 w-full bg-gray-900/80 backdrop-blur-md border border-white/10 rounded-lg shadow-lg max-h-64 overflow-y-auto z-30">
                           {isCoinListLoading ? (

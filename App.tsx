@@ -153,7 +153,7 @@ const getCachedBtc = (): CryptoData | null => {
     return data ? JSON.parse(data) : null;
   } catch (e) {
     console.warn('Gagal memuat cache BTC:', e);
-    return null;
+    return [];
   }
 };
 // --- AKHIR PERBAIKAN ---
@@ -1132,9 +1132,12 @@ const AppContent: React.FC = () => {
     // Ini tetap berjalan seperti biasa untuk me-refresh data tren setiap 4 menit.
     const REFRESH_INTERVAL = 4 * 60 * 1000; // 4 menit
     const intervalId = setInterval(() => {
+      // --- PERUBAHAN DI SINI ---
       // HANYA refresh trending. BTC, Rate, dan List tidak perlu di-refresh sesering ini
-      console.log("Memperbarui daftar trending (4 menit)...");
+      console.log("Memperbarui BTC & daftar trending (4 menit)..."); // Pesan log diubah
+      fetchBtc(); // <-- TAMBAHKAN BARIS INI
       fetchTrendingData(false); // Refresh tanpa skeleton
+      // --- AKHIR PERUBAHAN ---
     }, REFRESH_INTERVAL);
 
     // --- Cleanup Timers ---

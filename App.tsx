@@ -308,6 +308,32 @@ const AppContent: React.FC = () => {
       else console.error('Gagal menyegarkan data tren:', errorMessage);
     } finally { if (showSkeleton) setIsTrendingLoading(false); }
   }, []);
+  
+  // --- PERBAIKAN: Fungsi-fungsi ini sekarang menjadi useCallback ---
+  const fetchBtc = useCallback(async () => {
+    try {
+      const btcData = await fetchCoinDetails('bitcoin');
+      setBtcFetchedCoin(btcData);
+    } catch (err) {
+      console.error("Gagal memuat data Bitcoin:", err);
+    }
+  }, []); // Dependensi kosong, hanya perlu didefinisikan sekali
+
+  const getRate = useCallback(async () => {
+    setIsRateLoading(true);
+    try { setIdrRate(await fetchIdrRate()); }
+    catch (error) { console.error('Gagal ambil kurs IDR:', error); setIdrRate(16000); }
+    finally { setIsRateLoading(false); }
+  }, []); // Dependensi kosong
+
+  const fetchList = useCallback(async () => {
+    setIsCoinListLoading(true);
+    setCoinListError(null);
+    try { setFullCoinList(await fetchTop500Coins()); }
+    catch (err) { setCoinListError('Gagal ambil daftar koin.'); }
+    finally { setIsCoinListLoading(false); }
+  }, []); // Dependensi kosong
+  // --- AKHIR PERBAIKAN FUNGSI ---
 
   const handleResetToTrending = useCallback(() => {
     setSearchedCoin(null);
@@ -1010,59 +1036,52 @@ const AppContent: React.FC = () => {
     return () => unsubscribe();
   }, [database, currentRoom, handleLogout]); // handleLogout ditambahkan sebagai dependency
 
-  // --- PERUBAHAN DI SINI: Atur timer 4 menit ---
+  // --- PERBAIKAN DI SINI: Atur timer 4 menit ---
   // Efek untuk mengambil data (API calls, dll)
   useEffect(() => {
-    // 1. Panggil fetchTrendingData() saat pertama kali dimuat (dengan skeleton)
-    fetchTrendingData(true);
+    // --- P1 (Prioritas 1: 0 md) ---
+    // Ini mengambil "Peluang Pasar Lainnya" (trendingCoins) dan "Hero Koin (BTC)" (btcFetchedCoin)
+    // Sesuai permintaan Anda, ini dipanggil paling pertama.
+    console.log("[API Stagger] P1: Memanggil fetchTrendingData dan fetchBtc...");
+    fetchTrendingData(true); // Menampilkan skeleton
+    fetchBtc();
 
-    // 2. Tentukan interval (4 menit)
-    const REFRESH_INTERVAL = 4 * 60 * 1000; // 4 menit = 240000 ms
+    // --- P2 (Prioritas 2: 700 md) ---
+    // Ini mengambil kurs IDR (penting untuk P1)
+    const timerP2_Rate = setTimeout(() => {
+      console.log("[API Stagger] P2: Memanggil getRate...");
+      getRate();
+    }, 700); // Tunda 700ms
 
-    // 3. Atur interval untuk me-refresh data secara diam-diam
+    // --- P3 (Prioritas 3: 1500 md) ---
+    // Ini adalah panggilan terberat (2 API) untuk data pencarian 500 koin.
+    // Kita tunda paling lama karena tidak langsung dilihat pengguna.
+    const timerP3_List = setTimeout(() => {
+      console.log("[API Stagger] P3: Memanggil fetchList (500 koin)...");
+      fetchList();
+    }, 1500); // Tunda 1.5 detik
+
+    // --- Interval Refresh (Biarkan seperti semula) ---
+    const REFRESH_INTERVAL = 4 * 60 * 1000; // 4 menit
     const intervalId = setInterval(() => {
       console.log("Memperbarui daftar trending (4 menit)...");
-      // Panggil dengan 'false' agar tidak menampilkan skeleton loading
-      fetchTrendingData(false); 
+      fetchTrendingData(false); // Refresh tanpa skeleton
     }, REFRESH_INTERVAL);
 
-    // 4. Bersihkan interval saat komponen di-unmount
-    return () => clearInterval(intervalId);
+    // --- Cleanup ---
+    // Pastikan semua timer dibersihkan saat komponen unmount
+    return () => {
+      clearTimeout(timerP2_Rate);
+      clearTimeout(timerP3_List);
+      clearInterval(intervalId);
+    };
     
-  }, [fetchTrendingData]); // Tetap gunakan fetchTrendingData sebagai dependency
-  // --- AKHIR PERUBAHAN ---
+  }, [fetchTrendingData, fetchBtc, getRate, fetchList]); // Tambahkan semua dependensi
+  // --- AKHIR PERBAIKAN ---
 
-  useEffect(() => {
-    const fetchBtc = async () => {
-      try {
-        const btcData = await fetchCoinDetails('bitcoin');
-        setBtcFetchedCoin(btcData);
-      } catch (err) {
-        console.error("Gagal memuat data Bitcoin:", err);
-      }
-    };
-    fetchBtc();
-  }, []); 
+  // TIGA BLOK useEffect DI BAWAH INI TELAH DIHAPUS
+  // DAN DIGABUNGKAN KE DALAM BLOK useEffect DI ATAS
 
-  useEffect(() => {
-    const getRate = async () => {
-      setIsRateLoading(true);
-      try { setIdrRate(await fetchIdrRate()); }
-      catch (error) { console.error('Gagal ambil kurs IDR:', error); setIdrRate(16000); }
-      finally { setIsRateLoading(false); }
-    };
-    getRate();
-  }, []);
-  useEffect(() => {
-    const fetchList = async () => {
-      setIsCoinListLoading(true);
-      setCoinListError(null);
-      try { setFullCoinList(await fetchTop500Coins()); }
-      catch (err) { setCoinListError('Gagal ambil daftar koin.'); }
-      finally { setIsCoinListLoading(false); }
-    };
-    fetchList();
-  }, []);
   useEffect(() => {
     const savedNews = localStorage.getItem('cryptoNews');
     const lastFetch = localStorage.getItem('lastNewsFetch');

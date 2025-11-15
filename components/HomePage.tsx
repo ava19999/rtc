@@ -1,4 +1,4 @@
-// HomePage.tsx
+// components/HomePage.tsx
 import React, { useState, useCallback, useRef, lazy, Suspense, useEffect } from 'react';
 // --- PERUBAHAN DIMULAI ---
 import { fetchCryptoAnalysis } from '../services/geminiService';
@@ -86,9 +86,18 @@ const HomePage: React.FC<HomePageProps> = ({
     }
   }, []);
 
+  // --- PERBAIKAN DI SINI ---
   useEffect(() => { 
-    fetchDominanceData();
+    // Beri jeda 700ms agar berjalan bersamaan dengan P2 (getRate) dari App.tsx
+    const timer = setTimeout(() => {
+      console.log("[API Stagger] P2: Memanggil fetchDominanceData...");
+      fetchDominanceData();
+    }, 700); // Tunda 700ms
+    
+    // Bersihkan timer
+    return () => clearTimeout(timer);
   }, [fetchDominanceData]);
+  // --- AKHIR PERBAIKAN ---
 
   useEffect(() => {
     if (searchQuery.length > 0) {
@@ -126,7 +135,7 @@ const HomePage: React.FC<HomePageProps> = ({
     // Sekarang kita juga mengirimkan crypto.id
     fetchCryptoAnalysis(crypto.name, crypto.price, crypto.id)
       .then(setAnalysisResult)
-    // --- AKHIR PERUBAHAN ---
+    // --- AKHIR PERBAIKAN ---
       .catch(err => setAnalysisError(err.message))
       .finally(() => setIsAnalysisLoading(false));
     

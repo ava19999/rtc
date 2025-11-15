@@ -1,3 +1,5 @@
+// services/apiService.ts
+
 // Layanan cache dalam memori sederhana telah diganti dengan localStorage untuk persistensi.
 
 export const CACHE_DURATION = {
@@ -7,9 +9,11 @@ export const CACHE_DURATION = {
   LONG: 60 * 60 * 1000, // 1 jam
 };
 
-const MAX_RETRIES = 3;
+// --- PERBAIKAN DI SINI ---
+const MAX_RETRIES = 5; // Naikkan dari 3 ke 5
 const INITIAL_BACKOFF = 1000; // 1 detik
-const TIMEOUT_DURATION = 15000; // 15 detik
+const TIMEOUT_DURATION = 20000; // Naikkan dari 15 detik ke 20 detik
+// --- AKHIR PERBAIKAN ---
 
 // Helper untuk memeriksa ketersediaan localStorage dengan aman.
 const isLocalStorageAvailable = () => {
@@ -96,8 +100,11 @@ export const apiRequest = async (url: string, cacheDuration: number = CACHE_DURA
     } catch (error) {
       clearTimeout(timeoutId);
       if (retries > 0) {
-        // Penundaan eksponensial
-        const backoff = INITIAL_BACKOFF * Math.pow(2, MAX_RETRIES - retries);
+        // --- PERBAIKAN DI SINI: Tambahkan Jitter (jeda acak) ---
+        // Penundaan eksponensial + jeda acak (jitter) hingga 1 detik
+        const jitter = Math.random() * 1000;
+        const backoff = INITIAL_BACKOFF * Math.pow(2, MAX_RETRIES - retries) + jitter;
+        // --- AKHIR PERBAIKAN ---
         await new Promise(resolve => setTimeout(resolve, backoff));
         return fetchDataWithRetries(retries - 1);
       }

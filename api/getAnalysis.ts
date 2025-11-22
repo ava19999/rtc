@@ -97,14 +97,14 @@ const currentPriceOnlySchema = {
 // Fungsi helper untuk memanggil AI
 async function callGemini(prompt: string, schema: any) {
   const response = await ai.models.generateContent({
-    // --- PERUBAHAN: Menggunakan model Gemini 3.0 Pro sesuai instruksi ---
-    model: 'gemini-3.0-pro',
-    // --- AKHIR PERUBAHAN ---
+    // --- PERBAIKAN: Menggunakan 'gemini-1.5-pro' yang stabil dan tersedia ---
+    model: 'gemini-1.5-pro',
+    // --- AKHIR PERBAIKAN ---
     contents: prompt,
     config: {
       responseMimeType: "application/json",
       responseSchema: schema as any,
-      temperature: 0.5, 
+      temperature: 0.5, // Tetap 0.5 agar hasil lebih konsisten/konservatif
     },
   });
 

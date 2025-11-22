@@ -2,7 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'; 
 import { GoogleGenAI, Type } from "@google/genai";
 import admin from 'firebase-admin';
-// Impor tipe baru dari file types (pastikan file types.ts ada dan sesuai path)
+// Impor tipe baru dari file types
 import type { AnalysisResult, TradePlan } from '../types'; 
 
 // --- Inisialisasi Firebase Admin ---
@@ -97,14 +97,15 @@ const currentPriceOnlySchema = {
 // Fungsi helper untuk memanggil AI
 async function callGemini(prompt: string, schema: any) {
   const response = await ai.models.generateContent({
-    // --- PERBAIKAN: Menggunakan 'gemini-1.5-pro' yang stabil dan tersedia ---
-    model: 'gemini-1.5-pro',
+    // --- PERBAIKAN: Menggunakan alias 'gemini-1.5-pro-latest' ---
+    // Ini memastikan kita mendapatkan versi Pro terbaru yang valid di API v1beta.
+    model: 'gemini-1.5-pro-latest', 
     // --- AKHIR PERBAIKAN ---
     contents: prompt,
     config: {
       responseMimeType: "application/json",
       responseSchema: schema as any,
-      temperature: 0.5, // Tetap 0.5 agar hasil lebih konsisten/konservatif
+      temperature: 0.5,
     },
   });
 

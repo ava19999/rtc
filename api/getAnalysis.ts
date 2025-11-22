@@ -2,7 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'; 
 import { GoogleGenAI, Type } from "@google/genai";
 import admin from 'firebase-admin';
-// Impor tipe baru dari file types
+// Impor tipe baru dari file types (pastikan file types.ts ada dan sesuai path)
 import type { AnalysisResult, TradePlan } from '../types'; 
 
 // --- Inisialisasi Firebase Admin ---
@@ -97,14 +97,14 @@ const currentPriceOnlySchema = {
 // Fungsi helper untuk memanggil AI
 async function callGemini(prompt: string, schema: any) {
   const response = await ai.models.generateContent({
-    model: 'gemini-flash-latest',
+    // --- PERUBAHAN: Menggunakan model Gemini 3.0 Pro sesuai instruksi ---
+    model: 'gemini-3.0-pro',
+    // --- AKHIR PERUBAHAN ---
     contents: prompt,
     config: {
       responseMimeType: "application/json",
       responseSchema: schema as any,
-      // --- PERUBAHAN DI SINI ---
-      temperature: 0.5, // Diatur ke 0.5 sesuai permintaan
-      // --- AKHIR PERUBAHAN ---
+      temperature: 0.5, 
     },
   });
 
@@ -189,7 +189,6 @@ export default async function handler(
       // --- KASUS 1: CACHE VALID ---
       // Minta HANYA 'currentPricePlan' dan 'reasoning'-nya
       
-      // --- PERUBAHAN PROMPT ---
       const promptCurrentOnly = `
         Persona: 'RTC Pro Trader AI'. Konservatif, teliti, dan sangat ketat.
         
@@ -209,7 +208,6 @@ export default async function handler(
         2.  **Penjelasan (untuk 'reasoning'):**
             * Berikan penjelasan SINGKAT dan LUGAS dalam Bahasa Indonesia *hanya* untuk 'Rencana Harga Saat Ini'. Jelaskan mengapa SL/TP dipilih berdasarkan analisis (Volume/S/R/Psikologi).
       `;
-      // --- AKHIR PROMPT ---
       
       console.log(`[getAnalysis] Cache VALID. Meminta AI HANYA untuk rencana harga saat ini...`);
       const freshData = await callGemini(promptCurrentOnly, currentPriceOnlySchema);
@@ -227,7 +225,6 @@ export default async function handler(
       // --- KASUS 2: CACHE TIDAK VALID / KOSONG ---
       // Minta KEDUA rencana
       
-      // --- PERUBAHAN PROMPT ---
       const promptFull = `
         Persona: 'RTC Pro Trader AI'. Konservatif, teliti, dan sangat ketat.
 
@@ -256,7 +253,6 @@ export default async function handler(
             * Jelaskan risiko dan alasan SL/TP-nya (Volume/S/R/Psikologi).
             * JANGAN sebutkan 'Opsi Terbaik' di dalam reasoning.
       `;
-      // --- AKHIR PROMPT ---
 
       console.log(`[getAnalysis] Cache TIDAK VALID. Meminta AI untuk KEDUA rencana...`);
       const fullResult = await callGemini(promptFull, fullAnalysisSchema) as Omit<AnalysisResult, 'isCachedData'>;

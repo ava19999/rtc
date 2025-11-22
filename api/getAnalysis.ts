@@ -97,15 +97,14 @@ const currentPriceOnlySchema = {
 // Fungsi helper untuk memanggil AI
 async function callGemini(prompt: string, schema: any) {
   const response = await ai.models.generateContent({
-    // --- PERBAIKAN: Menggunakan alias 'gemini-1.5-pro-latest' ---
-    // Ini memastikan kita mendapatkan versi Pro terbaru yang valid di API v1beta.
-    model: 'gemini-1.5-pro-latest', 
-    // --- AKHIR PERBAIKAN ---
+    model: 'gemini-flash-latest',
     contents: prompt,
     config: {
       responseMimeType: "application/json",
       responseSchema: schema as any,
-      temperature: 0.5,
+      // --- PERUBAHAN DI SINI ---
+      temperature: 0.5, // Diatur ke 0.5 sesuai permintaan
+      // --- AKHIR PERUBAHAN ---
     },
   });
 
@@ -190,6 +189,7 @@ export default async function handler(
       // --- KASUS 1: CACHE VALID ---
       // Minta HANYA 'currentPricePlan' dan 'reasoning'-nya
       
+      // --- PERUBAHAN PROMPT ---
       const promptCurrentOnly = `
         Persona: 'RTC Pro Trader AI'. Konservatif, teliti, dan sangat ketat.
         
@@ -209,6 +209,7 @@ export default async function handler(
         2.  **Penjelasan (untuk 'reasoning'):**
             * Berikan penjelasan SINGKAT dan LUGAS dalam Bahasa Indonesia *hanya* untuk 'Rencana Harga Saat Ini'. Jelaskan mengapa SL/TP dipilih berdasarkan analisis (Volume/S/R/Psikologi).
       `;
+      // --- AKHIR PROMPT ---
       
       console.log(`[getAnalysis] Cache VALID. Meminta AI HANYA untuk rencana harga saat ini...`);
       const freshData = await callGemini(promptCurrentOnly, currentPriceOnlySchema);
@@ -226,6 +227,7 @@ export default async function handler(
       // --- KASUS 2: CACHE TIDAK VALID / KOSONG ---
       // Minta KEDUA rencana
       
+      // --- PERUBAHAN PROMPT ---
       const promptFull = `
         Persona: 'RTC Pro Trader AI'. Konservatif, teliti, dan sangat ketat.
 
@@ -254,6 +256,7 @@ export default async function handler(
             * Jelaskan risiko dan alasan SL/TP-nya (Volume/S/R/Psikologi).
             * JANGAN sebutkan 'Opsi Terbaik' di dalam reasoning.
       `;
+      // --- AKHIR PROMPT ---
 
       console.log(`[getAnalysis] Cache TIDAK VALID. Meminta AI untuk KEDUA rencana...`);
       const fullResult = await callGemini(promptFull, fullAnalysisSchema) as Omit<AnalysisResult, 'isCachedData'>;
